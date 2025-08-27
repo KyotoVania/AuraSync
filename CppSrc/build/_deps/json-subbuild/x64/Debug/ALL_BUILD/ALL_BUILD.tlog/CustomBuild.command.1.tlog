@@ -1,0 +1,10 @@
+^C:\USERS\JEANC\DOCUMENTS\GITHUB\AURASYNC\CPPSRC\BUILD\_DEPS\JSON-SUBBUILD\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/_deps/json-subbuild -BC:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/_deps/json-subbuild --check-stamp-file C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/_deps/json-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
