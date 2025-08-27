@@ -5,10 +5,10 @@
 #include "../include/pipeline/AnalysisPipeline.h"
 #include "../include/core/AudioBuffer.h"
 #include "../include/core/JsonContract.h"
+#include "../include/modules/BPMModule.h"
 
 // Forward declarations for fake module factories
 namespace ave::modules {
-    std::unique_ptr<ave::core::IAnalysisModule> createFakeBPMModule();
     std::unique_ptr<ave::core::IAnalysisModule> createFakeOnsetModule();
     std::unique_ptr<ave::core::IAnalysisModule> createFakeStructureModule();
     std::unique_ptr<ave::core::IAnalysisModule> createFakeTonalityModule();
@@ -62,9 +62,9 @@ int main(int argc, char* argv[]) {
         std::cout << "\nCreating analysis pipeline..." << std::endl;
         auto pipeline = std::make_unique<ave::pipeline::AnalysisPipeline>();
 
-        // Register all fake modules
+        // Register modules (use real BPM, others fake for now)
         std::cout << "Registering modules..." << std::endl;
-        pipeline->registerModule(ave::modules::createFakeBPMModule());
+        pipeline->registerModule(ave::modules::createRealBPMModule());
         pipeline->registerModule(ave::modules::createFakeOnsetModule());
         pipeline->registerModule(ave::modules::createFakeStructureModule());
         pipeline->registerModule(ave::modules::createFakeTonalityModule());
@@ -74,7 +74,9 @@ int main(int argc, char* argv[]) {
         // Configure modules
         pipeline->setModuleConfig("BPM", {
             {"minBPM", 60},
-            {"maxBPM", 180}
+            {"maxBPM", 180},
+            {"frameSize", 1024},
+            {"hopSize", 512}
         });
 
         pipeline->setModuleConfig("Onset", {

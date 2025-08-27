@@ -33,12 +33,12 @@ add_library(ave_core STATIC
         # Pipeline
         src/pipeline/AnalysisPipeline.cpp
 
-        # Fake Modules (will be replaced by real implementations)
+        # Modules
+        src/modules/RealBPMModule.cpp
         src/modules/FakeBPMModule.cpp
         src/modules/FakeModuleOnset.cpp
 
         # Future real modules (commented for now)
-        # src/modules/RealBPMModule.cpp
         # src/modules/OnsetDetector.cpp
         # src/modules/StructureAnalyzer.cpp
         # src/modules/TonalityAnalyzer.cpp
@@ -67,7 +67,7 @@ target_link_libraries(ave_analysis
         ave_core
 )
 
-# Copy FFTW DLL to output directory
+# Copy FFTW DLL to output directory for main
 add_custom_command(TARGET ave_analysis POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${FFTW3_DIR}/libfftw3-3.dll"
@@ -92,6 +92,13 @@ if(BUILD_TESTS)
     target_link_libraries(ave_tests
             PRIVATE
             ave_core
+    )
+
+    # Copy FFTW DLL to test output directory
+    add_custom_command(TARGET ave_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FFTW3_DIR}/libfftw3-3.dll"
+            $<TARGET_FILE_DIR:ave_tests>
     )
 
     add_test(NAME ave_tests COMMAND ave_tests)
