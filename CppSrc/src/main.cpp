@@ -6,6 +6,7 @@
 #include "../include/core/AudioBuffer.h"
 #include "../include/core/JsonContract.h"
 #include "../include/modules/BPMModule.h"
+#include "../include/pipeline/AudioLoader.h"
 
 // Forward declarations for fake module factories
 namespace ave::modules {
@@ -16,33 +17,20 @@ namespace ave::modules {
     std::unique_ptr<ave::core::IAnalysisModule> createFakeCueModule();
 }
 
-/**
- * Fake audio loader for testing
- * In real implementation, will use libsndfile
- */
+// Real audio loader using WAV reader
 ave::core::AudioBuffer loadAudioFile(const std::string& path) {
-    std::cout << "Loading audio file: " << path << std::endl;
-
-    // Create fake audio buffer for testing
-    size_t sampleRate = 44100;
-    size_t durationSec = 180; // 3 minutes
-    size_t channels = 2;
-    size_t frames = sampleRate * durationSec;
-
-    ave::core::AudioBuffer buffer(channels, frames, sampleRate);
-
-    // Fill with fake audio data (silence for now)
-    for (size_t ch = 0; ch < channels; ++ch) {
-        float* channelData = buffer.getChannel(ch);
-        for (size_t i = 0; i < frames; ++i) {
-            channelData[i] = 0.0f;
-        }
+    try {
+        return ave::pipeline::AudioLoader::loadWav(path);
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to load WAV ('" << path << "'): " << e.what() << "\nFalling back to silence for demo." << std::endl;
+        // Fallback: 10s of silence stereo
+        size_t sampleRate = 44100;
+        size_t durationSec = 10;
+        size_t channels = 2;
+        size_t frames = sampleRate * durationSec;
+        ave::core::AudioBuffer buffer(channels, frames, static_cast<float>(sampleRate));
+        return buffer;
     }
-
-    std::cout << "Loaded " << durationSec << " seconds of audio ("
-              << channels << " channels, " << sampleRate << " Hz)" << std::endl;
-
-    return buffer;
 }
 
 int main(int argc, char* argv[]) {
@@ -76,7 +64,10 @@ int main(int argc, char* argv[]) {
             {"minBPM", 60},
             {"maxBPM", 180},
             {"frameSize", 1024},
-            {"hopSize", 512}
+            {"hopSize", 512},
+            {"acfWindowSec", 8.0},
+            {"historySize", 10},
+            {"octaveCorrection", true}
         });
 
         pipeline->setModuleConfig("Onset", {

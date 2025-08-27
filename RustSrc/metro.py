@@ -26,4 +26,4 @@ def create_metronome(bpm, duration_sec, filename):
         wav.writeframes(signal.tobytes())
 
 # Créer un métronome à 120 BPM
-create_metronome(130, 10, "test_130bpm.wav")
+create_metronome(130, 10, "../CppSrc/tests/assets/test_130bpm.wav")

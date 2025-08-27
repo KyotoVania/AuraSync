@@ -32,18 +32,12 @@ add_library(ave_core STATIC
 
         # Pipeline
         src/pipeline/AnalysisPipeline.cpp
+        src/pipeline/AudioLoader.cpp
 
         # Modules
         src/modules/RealBPMModule.cpp
         src/modules/FakeBPMModule.cpp
         src/modules/FakeModuleOnset.cpp
-
-        # Future real modules (commented for now)
-        # src/modules/OnsetDetector.cpp
-        # src/modules/StructureAnalyzer.cpp
-        # src/modules/TonalityAnalyzer.cpp
-        # src/modules/SpectralAnalyzer.cpp
-        # src/modules/CueDetector.cpp
 )
 
 target_include_directories(ave_core
@@ -92,6 +86,13 @@ if(BUILD_TESTS)
     target_link_libraries(ave_tests
             PRIVATE
             ave_core
+    )
+
+    # Copy test assets (WAV files) next to the test binary, if present
+    add_custom_command(TARGET ave_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/assets"
+            "$<TARGET_FILE_DIR:ave_tests>/assets"
     )
 
     # Copy FFTW DLL to test output directory
