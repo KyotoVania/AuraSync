@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 #include <optional>
 #include <nlohmann/json.hpp>
 
@@ -10,7 +11,30 @@ namespace ave::core {
 
 // Forward declarations
 class AudioBuffer;
-class AnalysisContext;
+
+/**
+ * Context shared between modules
+ */
+class AnalysisContext {
+public:
+    // Sample rate from audio file
+    float sampleRate = 44100.0f;
+    
+    // Results from other modules (for dependencies)
+    std::map<std::string, nlohmann::json> moduleResults;
+    
+    // Global configuration
+    nlohmann::json globalConfig;
+    
+    // Get result from another module
+    std::optional<nlohmann::json> getModuleResult(const std::string& moduleName) const {
+        auto it = moduleResults.find(moduleName);
+        if (it != moduleResults.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+};
 
 /**
  * Base interface for all analysis modules
@@ -39,30 +63,6 @@ public:
     // Dependencies (for pipeline ordering)
     virtual std::vector<std::string> getDependencies() const { 
         return {}; 
-    }
-};
-
-/**
- * Context shared between modules
- */
-class AnalysisContext {
-public:
-    // Sample rate from audio file
-    float sampleRate = 44100.0f;
-    
-    // Results from other modules (for dependencies)
-    std::map<std::string, nlohmann::json> moduleResults;
-    
-    // Global configuration
-    nlohmann::json globalConfig;
-    
-    // Get result from another module
-    std::optional<nlohmann::json> getModuleResult(const std::string& moduleName) const {
-        auto it = moduleResults.find(moduleName);
-        if (it != moduleResults.end()) {
-            return it->second;
-        }
-        return std::nullopt;
     }
 };
 

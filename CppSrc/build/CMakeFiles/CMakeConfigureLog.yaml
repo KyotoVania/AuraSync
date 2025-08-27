@@ -97,7 +97,7 @@ events:
       The output was:
       0
       MSBuild version 17.12.12+1cce77968 for .NET Framework
-      Build started 8/27/2025 5:47:58 PM.
+      Build started 8/27/2025 6:02:05 PM.
       
       Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\4.1.0\\CompilerIdC\\CompilerIdC.vcxproj" on node 1 (default targets).
       PrepareForBuild:
@@ -126,7 +126,7 @@ events:
           0 Warning(s)
           0 Error(s)
       
-      Time Elapsed 00:00:00.83
+      Time Elapsed 00:00:00.58
       
       
       Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CompilerIdC.exe"
@@ -1000,7 +1000,7 @@ events:
       The output was:
       0
       MSBuild version 17.12.12+1cce77968 for .NET Framework
-      Build started 8/27/2025 5:47:59 PM.
+      Build started 8/27/2025 6:02:06 PM.
       
       Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\4.1.0\\CompilerIdCXX\\CompilerIdCXX.vcxproj" on node 1 (default targets).
       PrepareForBuild:
@@ -1029,7 +1029,7 @@ events:
           0 Warning(s)
           0 Error(s)
       
-      Time Elapsed 00:00:00.61
+      Time Elapsed 00:00:00.57
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -1547,8 +1547,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam"
-      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam"
+      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tive46"
+      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tive46"
     cmakeVariables:
       CMAKE_C_FLAGS: "/DWIN32 /D_WINDOWS"
       CMAKE_C_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -1557,34 +1557,34 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam'
+        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tive46'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_568f4.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_6afcb.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         MSBuild version 17.12.12+1cce77968 for .NET Framework
-        Build started 8/27/2025 5:48:00 PM.
+        Build started 8/27/2025 6:02:07 PM.
         
-        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\cmTC_568f4.vcxproj" on node 1 (default targets).
+        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tive46\\cmTC_6afcb.vcxproj" on node 1 (default targets).
         PrepareForBuild:
-          Creating directory "cmTC_568f4.dir\\Debug\\".
+          Creating directory "cmTC_6afcb.dir\\Debug\\".
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\Debug\\".
-          Creating directory "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\".
+          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tive46\\Debug\\".
+          Creating directory "cmTC_6afcb.dir\\Debug\\cmTC_6afcb.tlog\\".
         InitializeBuildStatus:
-          Creating "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
-          Touching "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\unsuccessfulbuild".
+          Creating "cmTC_6afcb.dir\\Debug\\cmTC_6afcb.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
+          Touching "cmTC_6afcb.dir\\Debug\\cmTC_6afcb.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_568f4.dir\\Debug\\\\" /Fd"cmTC_568f4.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_6afcb.dir\\Debug\\\\" /Fd"cmTC_6afcb.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
           Microsoft (R) C/C++ Optimizing Compiler Version 19.38.33144 for x64
           Copyright (C) Microsoft Corporation.  All rights reserved.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_568f4.dir\\Debug\\\\" /Fd"cmTC_568f4.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_6afcb.dir\\Debug\\\\" /Fd"cmTC_6afcb.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
           CMakeCCompilerABI.c
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\Debug\\cmTC_568f4.exe" /INCREMENTAL /ILK:"cmTC_568f4.dir\\Debug\\cmTC_568f4.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam/Debug/cmTC_568f4.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam/Debug/cmTC_568f4.lib" /MACHINE:X64  /machine:x64 cmTC_568f4.dir\\Debug\\CMakeCCompilerABI.obj
-          cmTC_568f4.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\Debug\\cmTC_568f4.exe
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tive46\\Debug\\cmTC_6afcb.exe" /INCREMENTAL /ILK:"cmTC_6afcb.dir\\Debug\\cmTC_6afcb.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tive46/Debug/cmTC_6afcb.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tive46/Debug/cmTC_6afcb.lib" /MACHINE:X64  /machine:x64 cmTC_6afcb.dir\\Debug\\CMakeCCompilerABI.obj
+          cmTC_6afcb.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tive46\\Debug\\cmTC_6afcb.exe
         FinalizeBuildStatus:
-          Deleting file "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\unsuccessfulbuild".
-          Touching "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\cmTC_568f4.lastbuildstate".
-        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\cmTC_568f4.vcxproj" (default targets).
+          Deleting file "cmTC_6afcb.dir\\Debug\\cmTC_6afcb.tlog\\unsuccessfulbuild".
+          Touching "cmTC_6afcb.dir\\Debug\\cmTC_6afcb.tlog\\cmTC_6afcb.lastbuildstate".
+        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tive46\\cmTC_6afcb.vcxproj" (default targets).
         
         Build succeeded.
             0 Warning(s)
@@ -1630,8 +1630,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7"
-      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7"
+      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lp1bw5"
+      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lp1bw5"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -1641,40 +1641,40 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7'
+        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lp1bw5'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_eaaf2.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_fe8ac.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         MSBuild version 17.12.12+1cce77968 for .NET Framework
-        Build started 8/27/2025 5:48:01 PM.
+        Build started 8/27/2025 6:02:08 PM.
         
-        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\cmTC_eaaf2.vcxproj" on node 1 (default targets).
+        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lp1bw5\\cmTC_fe8ac.vcxproj" on node 1 (default targets).
         PrepareForBuild:
-          Creating directory "cmTC_eaaf2.dir\\Debug\\".
+          Creating directory "cmTC_fe8ac.dir\\Debug\\".
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\Debug\\".
-          Creating directory "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\".
+          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lp1bw5\\Debug\\".
+          Creating directory "cmTC_fe8ac.dir\\Debug\\cmTC_fe8ac.tlog\\".
         InitializeBuildStatus:
-          Creating "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
-          Touching "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\unsuccessfulbuild".
+          Creating "cmTC_fe8ac.dir\\Debug\\cmTC_fe8ac.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
+          Touching "cmTC_fe8ac.dir\\Debug\\cmTC_fe8ac.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_eaaf2.dir\\Debug\\\\" /Fd"cmTC_eaaf2.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_fe8ac.dir\\Debug\\\\" /Fd"cmTC_fe8ac.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           Microsoft (R) C/C++ Optimizing Compiler Version 19.38.33144 for x64
           Copyright (C) Microsoft Corporation.  All rights reserved.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_eaaf2.dir\\Debug\\\\" /Fd"cmTC_eaaf2.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_fe8ac.dir\\Debug\\\\" /Fd"cmTC_fe8ac.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\Debug\\cmTC_eaaf2.exe" /INCREMENTAL /ILK:"cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7/Debug/cmTC_eaaf2.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7/Debug/cmTC_eaaf2.lib" /MACHINE:X64  /machine:x64 cmTC_eaaf2.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_eaaf2.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\Debug\\cmTC_eaaf2.exe
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lp1bw5\\Debug\\cmTC_fe8ac.exe" /INCREMENTAL /ILK:"cmTC_fe8ac.dir\\Debug\\cmTC_fe8ac.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lp1bw5/Debug/cmTC_fe8ac.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lp1bw5/Debug/cmTC_fe8ac.lib" /MACHINE:X64  /machine:x64 cmTC_fe8ac.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_fe8ac.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lp1bw5\\Debug\\cmTC_fe8ac.exe
         FinalizeBuildStatus:
-          Deleting file "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\unsuccessfulbuild".
-          Touching "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\cmTC_eaaf2.lastbuildstate".
-        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\cmTC_eaaf2.vcxproj" (default targets).
+          Deleting file "cmTC_fe8ac.dir\\Debug\\cmTC_fe8ac.tlog\\unsuccessfulbuild".
+          Touching "cmTC_fe8ac.dir\\Debug\\cmTC_fe8ac.tlog\\cmTC_fe8ac.lastbuildstate".
+        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lp1bw5\\cmTC_fe8ac.vcxproj" (default targets).
         
         Build succeeded.
             0 Warning(s)
             0 Error(s)
         
-        Time Elapsed 00:00:00.59
+        Time Elapsed 00:00:00.58
         
       exitCode: 0
   -

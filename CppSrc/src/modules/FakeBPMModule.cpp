@@ -1,7 +1,9 @@
 ﻿#include "../../include/modules/BPMModule.h"
 #include "../../include/core/AudioBuffer.h"
+#include "../../include/core/IAnalysisModule.h"
 #include <iostream>
 #include <random>
+#include <algorithm> // For std::min
 
 namespace ave::modules {
 
@@ -10,7 +12,7 @@ namespace ave::modules {
  * Returns simulated BPM data
  * Will be replaced by real algorithm from Rust port
  */
-class FakeBPMModule : public core::IAnalysisModule {
+class FakeBPMModule : public ave::core::IAnalysisModule {
 private:
     float m_minBPM = 60.0f;
     float m_maxBPM = 200.0f;
@@ -53,9 +55,9 @@ public:
         m_confidence = 0.92f;
     }
     
-    nlohmann::json process(const core::AudioBuffer& audio, 
-                           const core::AnalysisContext& context) override {
-        std::cout << "[FakeBPM] Processing " << audio.getFrameCount() 
+    nlohmann::json process(const ave::core::AudioBuffer& audio,
+                           const ave::core::AnalysisContext& context) override {
+        std::cout << "[FakeBPM] Processing " << audio.getFrameCount()
                   << " frames at " << audio.getSampleRate() << " Hz" << std::endl;
         
         // Generate fake beat grid
@@ -74,7 +76,9 @@ public:
         // Generate fake downbeats (every 4 beats)
         nlohmann::json downbeats = nlohmann::json::array();
         for (size_t i = 0; i < beatGrid.size(); i += 4) {
-            downbeats.push_back(beatGrid[i]["t"]);
+            if (i < beatGrid.size()) {
+                downbeats.push_back(beatGrid[i]["t"]);
+            }
         }
         
         // Return analysis result
@@ -102,8 +106,8 @@ public:
     }
 };
 
-// Factory registration
-std::unique_ptr<core::IAnalysisModule> createFakeBPMModule() {
+// Factory function
+std::unique_ptr<ave::core::IAnalysisModule> createFakeBPMModule() {
     return std::make_unique<FakeBPMModule>();
 }
 

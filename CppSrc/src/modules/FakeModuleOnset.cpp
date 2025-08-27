@@ -225,7 +225,7 @@ public:
                 float envelope = std::sin(t * M_PI) * 0.3f + 0.7f; // Fake envelope
                 band.push_back({
                     {"t", t},
-                    {"v", std::max(0.0f, baseLevel * envelope + dist(gen))}
+                    {"v", std::max<float>(0.0f, baseLevel * envelope + dist(gen))}
                 });
             }
             return band;
@@ -350,3 +350,4 @@ std::unique_ptr<core::IAnalysisModule> createFakeCueModule() {
 }
 
 } // namespace ave::modules
+
