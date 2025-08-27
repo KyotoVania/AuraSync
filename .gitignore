@@ -30,6 +30,9 @@ CppSrc/fftw-3.3.5-dll64/*.exp
 
 # Rust build artifacts
 RustSrc/target/
+RustSrc/*.rlib
+RustSrc/*.d
+RustSrc/*.exe
 
 # OS/IDE files
 *.DS_Store
@@ -51,5 +54,5 @@ Thumbs.db
 !CppSrc/tests/
 !RustSrc/src/
 !RustSrc/Cargo.toml
+!RustSrc/Cargo.lock
 !shared/
-
