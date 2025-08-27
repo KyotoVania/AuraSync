@@ -1,41 +1,55 @@
-# Prerequisites
-*.d
+# C++ build artifacts
+CppSrc/build/
+CppSrc/bin/
+CppSrc/Debug/
+CppSrc/x64/
+CppSrc/CMakeFiles/
+CppSrc/CMakeCache.txt
+CppSrc/_deps/
+CppSrc/*.vcxproj
+CppSrc/*.vcxproj.filters
+CppSrc/*.sln
+CppSrc/*.pdb
+CppSrc/*.obj
+CppSrc/*.exp
+CppSrc/*.lib
+CppSrc/*.ipch
+CppSrc/*.aps
+CppSrc/*.ncb
+CppSrc/*.suo
+CppSrc/*.sdf
+CppSrc/*.opensdf
+CppSrc/*.VC.db
+CppSrc/*.VC.opendb
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# FFTW binaries
+CppSrc/fftw-3.3.5-dll64/*.dll
+CppSrc/fftw-3.3.5-dll64/*.exe
+CppSrc/fftw-3.3.5-dll64/*.lib
+CppSrc/fftw-3.3.5-dll64/*.exp
 
-# Precompiled Headers
-*.gch
-*.pch
+# Rust build artifacts
+RustSrc/target/
 
-# Linker files
-*.ilk
+# OS/IDE files
+*.DS_Store
+Thumbs.db
+*.log
 
-# Debugger Files
-*.pdb
+# Misc
+*.tmp
+*.bak
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Ignore by default all hidden files/folders
+.*
 
-# Fortran module files
-*.mod
-*.smod
+# Don't ignore source, configs, docs
+!guide.md
+!README.md
+!CppSrc/include/
+!CppSrc/src/
+!CppSrc/tests/
+!RustSrc/src/
+!RustSrc/Cargo.toml
+!shared/
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
