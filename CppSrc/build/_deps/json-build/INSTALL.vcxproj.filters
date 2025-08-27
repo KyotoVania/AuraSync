@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\build\CMakeFiles\98ad4f6a756fb609bbc2cc1aaed9267c\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{061AE396-2A4B-3A76-9A0F-AFF14B2951E7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

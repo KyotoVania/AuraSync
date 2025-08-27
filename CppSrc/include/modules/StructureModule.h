@@ -1,0 +1,8 @@
+﻿//
+// Created by jeanc on 8/27/2025.
+//
+
+#ifndef AURASYNC_STRUCTUREMODULE_H
+#define AURASYNC_STRUCTUREMODULE_H
+
+#endif //AURASYNC_STRUCTUREMODULE_H

@@ -1,4 +1,10 @@
-C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/AuraSyncCpp.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/ave_core.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/ave_analysis.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/ave_tests.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/RUN_TESTS.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/INSTALL.dir
 C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/ALL_BUILD.dir
 C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/ZERO_CHECK.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/_deps/json-build/CMakeFiles/RUN_TESTS.dir
+C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/_deps/json-build/CMakeFiles/INSTALL.dir
 C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/_deps/json-build/CMakeFiles/ALL_BUILD.dir

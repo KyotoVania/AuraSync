@@ -1,10 +1,16 @@
 ﻿cmake_minimum_required(VERSION 3.16)
-project(AuraSyncCpp)
+project(AudioVisualEngineAnalysis VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- Dépendance nlohmann/json (inchangé) ---
+# Output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# --- Dependencies ---
+
+# nlohmann/json
 include(FetchContent)
 FetchContent_Declare(
         json
@@ -13,27 +19,104 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# On définit notre exécutable
-add_executable(AuraSyncCpp main.cpp)
+# FFTW3 (assuming it's in fftw-3.3.5-dll64)
+set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/fftw-3.3.5-dll64)
 
-# --- Configuration pour FFTW3 ---
-# On attache les propriétés à la cible APRÈS sa création
+# --- Library ---
 
-# 1. On définit une variable pratique pour le chemin vers la lib FFTW3
-set(FFTW3_DIR fftw-3.3.5-dll64)
+# Core library
+add_library(ave_core STATIC
+        # Core
+        src/core/AudioBuffer.cpp
+        src/core/JsonContract.cpp
 
-# 2. On indique à CMake où trouver les fichiers .h de FFTW3
-target_include_directories(AuraSyncCpp PRIVATE ${FFTW3_DIR})
+        # Pipeline
+        src/pipeline/AnalysisPipeline.cpp
 
-# 3. On linke les librairies (nlohmann et le .lib de FFTW3 qu'on va créer)
-target_link_libraries(AuraSyncCpp PRIVATE
+        # Fake Modules (will be replaced by real implementations)
+        src/modules/FakeBPMModule.cpp
+        src/modules/FakeModuleOnset.cpp
+
+        # Future real modules (commented for now)
+        # src/modules/RealBPMModule.cpp
+        # src/modules/OnsetDetector.cpp
+        # src/modules/StructureAnalyzer.cpp
+        # src/modules/TonalityAnalyzer.cpp
+        # src/modules/SpectralAnalyzer.cpp
+        # src/modules/CueDetector.cpp
+)
+
+target_include_directories(ave_core
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${FFTW3_DIR}
+)
+
+target_link_libraries(ave_core
+        PUBLIC
         nlohmann_json::nlohmann_json
         ${FFTW3_DIR}/libfftw3-3.lib
 )
 
-# 4. On copie automatiquement le .dll à côté de l'exécutable après la compilation
-add_custom_command(TARGET AuraSyncCpp POST_BUILD
+# --- Main Executable ---
+
+add_executable(ave_analysis src/main.cpp)
+
+target_link_libraries(ave_analysis
+        PRIVATE
+        ave_core
+)
+
+# Copy FFTW DLL to output directory
+add_custom_command(TARGET ave_analysis POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${FFTW3_DIR}/libfftw3-3.dll"
-        $<TARGET_FILE_DIR:AuraSyncCpp>
+        $<TARGET_FILE_DIR:ave_analysis>
 )
+
+# --- Tests ---
+
+option(BUILD_TESTS "Build tests" ON)
+
+if(BUILD_TESTS)
+    enable_testing()
+
+    # Test executable
+    add_executable(ave_tests
+            tests/test_main.cpp
+            tests/test_modules.cpp
+            tests/test_pipeline.cpp
+            tests/test_json_contract.cpp
+    )
+
+    target_link_libraries(ave_tests
+            PRIVATE
+            ave_core
+    )
+
+    add_test(NAME ave_tests COMMAND ave_tests)
+endif()
+
+# --- Installation ---
+
+install(TARGETS ave_analysis ave_core
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+)
+
+install(DIRECTORY include/
+        DESTINATION include/ave
+)
+
+# --- Build Info ---
+
+message(STATUS "========================================")
+message(STATUS "Audio Visual Engine - Analysis Pipeline")
+message(STATUS "========================================")
+message(STATUS "Version: ${PROJECT_VERSION}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "FFTW3 Directory: ${FFTW3_DIR}")
+message(STATUS "Build Tests: ${BUILD_TESTS}")
+message(STATUS "========================================")

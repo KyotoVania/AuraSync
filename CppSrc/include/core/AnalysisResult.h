@@ -1,0 +1,8 @@
+﻿//
+// Created by jeanc on 8/27/2025.
+//
+
+#ifndef AURASYNC_ANALYSISRESULT_H
+#define AURASYNC_ANALYSISRESULT_H
+
+#endif //AURASYNC_ANALYSISRESULT_H

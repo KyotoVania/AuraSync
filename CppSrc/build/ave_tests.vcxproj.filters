@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\tests\test_main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\tests\test_modules.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\tests\test_pipeline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\tests\test_json_contract.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="C:\Users\jeanc\Documents\GitHub\AuraSync\CppSrc\build\_deps\json-src\nlohmann_json.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4B07369E-1464-3FE3-B360-E23BED5C7B9C}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

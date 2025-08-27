@@ -1,0 +1,8 @@
+﻿//
+// Created by jeanc on 8/27/2025.
+//
+
+#ifndef AURASYNC_TONALITYMODULE_H
+#define AURASYNC_TONALITYMODULE_H
+
+#endif //AURASYNC_TONALITYMODULE_H

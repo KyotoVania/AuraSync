@@ -1,0 +1,8 @@
+﻿//
+// Created by jeanc on 8/27/2025.
+//
+
+#ifndef AURASYNC_SPECTRALMODULE_H
+#define AURASYNC_SPECTRALMODULE_H
+
+#endif //AURASYNC_SPECTRALMODULE_H

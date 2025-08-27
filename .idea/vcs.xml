@@ -3,6 +3,5 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/CppSrc/build/_deps/json-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/RustSrc/RustVisualizer" vcs="Git" />
   </component>
 </project>

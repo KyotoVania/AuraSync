@@ -97,7 +97,7 @@ events:
       The output was:
       0
       MSBuild version 17.12.12+1cce77968 for .NET Framework
-      Build started 8/27/2025 4:45:52 PM.
+      Build started 8/27/2025 5:47:58 PM.
       
       Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\4.1.0\\CompilerIdC\\CompilerIdC.vcxproj" on node 1 (default targets).
       PrepareForBuild:
@@ -126,7 +126,7 @@ events:
           0 Warning(s)
           0 Error(s)
       
-      Time Elapsed 00:00:01.51
+      Time Elapsed 00:00:00.83
       
       
       Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CompilerIdC.exe"
@@ -1000,7 +1000,7 @@ events:
       The output was:
       0
       MSBuild version 17.12.12+1cce77968 for .NET Framework
-      Build started 8/27/2025 4:45:54 PM.
+      Build started 8/27/2025 5:47:59 PM.
       
       Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\4.1.0\\CompilerIdCXX\\CompilerIdCXX.vcxproj" on node 1 (default targets).
       PrepareForBuild:
@@ -1029,7 +1029,7 @@ events:
           0 Warning(s)
           0 Error(s)
       
-      Time Elapsed 00:00:00.97
+      Time Elapsed 00:00:00.61
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -1332,9 +1332,9 @@ events:
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files/CMake/sbin/"
       - "C:/Program Files/CMake/"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/"
-      - "C:/Program Files (x86)/AuraSyncCpp/"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/"
     searched_directories:
       - "C:/Users/jeanc/AppData/Local/Programs/cursor/resources/app/bin/rc.com"
       - "C:/Users/jeanc/AppData/Local/Programs/cursor/resources/app/bin/rc.exe"
@@ -1474,15 +1474,15 @@ events:
       - "C:/Program Files/CMake/rc.com"
       - "C:/Program Files/CMake/rc.exe"
       - "C:/Program Files/CMake/rc"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/rc.com"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/rc.exe"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/rc"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/rc.com"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/rc.exe"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/rc"
-      - "C:/Program Files (x86)/AuraSyncCpp/rc.com"
-      - "C:/Program Files (x86)/AuraSyncCpp/rc.exe"
-      - "C:/Program Files (x86)/AuraSyncCpp/rc"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/rc.com"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/rc.exe"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/rc"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/rc.com"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/rc.exe"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/rc"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/rc.com"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/rc.exe"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/rc"
     found: false
     search_context:
       ENV{PATH}:
@@ -1532,12 +1532,12 @@ events:
         - "C:\\Users\\jeanc\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\Users\\jeanc\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\jeanc\\AppData\\Local\\Programs\\Ollama"
-      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/AuraSyncCpp"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/AudioVisualEngineAnalysis"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
         - "C:/Program Files (x86)"
         - "C:/Program Files/CMake"
-        - "C:/Program Files (x86)/AuraSyncCpp"
+        - "C:/Program Files (x86)/AudioVisualEngineAnalysis"
   -
     kind: "try_compile-v1"
     backtrace:
@@ -1547,8 +1547,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-1o0c6d"
-      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-1o0c6d"
+      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam"
+      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam"
     cmakeVariables:
       CMAKE_C_FLAGS: "/DWIN32 /D_WINDOWS"
       CMAKE_C_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -1557,40 +1557,40 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-1o0c6d'
+        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_30ecf.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_568f4.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         MSBuild version 17.12.12+1cce77968 for .NET Framework
-        Build started 8/27/2025 4:45:55 PM.
+        Build started 8/27/2025 5:48:00 PM.
         
-        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1o0c6d\\cmTC_30ecf.vcxproj" on node 1 (default targets).
+        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\cmTC_568f4.vcxproj" on node 1 (default targets).
         PrepareForBuild:
-          Creating directory "cmTC_30ecf.dir\\Debug\\".
+          Creating directory "cmTC_568f4.dir\\Debug\\".
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1o0c6d\\Debug\\".
-          Creating directory "cmTC_30ecf.dir\\Debug\\cmTC_30ecf.tlog\\".
+          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\Debug\\".
+          Creating directory "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\".
         InitializeBuildStatus:
-          Creating "cmTC_30ecf.dir\\Debug\\cmTC_30ecf.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
-          Touching "cmTC_30ecf.dir\\Debug\\cmTC_30ecf.tlog\\unsuccessfulbuild".
+          Creating "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
+          Touching "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_30ecf.dir\\Debug\\\\" /Fd"cmTC_30ecf.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_568f4.dir\\Debug\\\\" /Fd"cmTC_568f4.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
           Microsoft (R) C/C++ Optimizing Compiler Version 19.38.33144 for x64
           Copyright (C) Microsoft Corporation.  All rights reserved.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_30ecf.dir\\Debug\\\\" /Fd"cmTC_30ecf.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /GS /fp:precise /Fo"cmTC_568f4.dir\\Debug\\\\" /Fd"cmTC_568f4.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCCompilerABI.c"
           CMakeCCompilerABI.c
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1o0c6d\\Debug\\cmTC_30ecf.exe" /INCREMENTAL /ILK:"cmTC_30ecf.dir\\Debug\\cmTC_30ecf.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-1o0c6d/Debug/cmTC_30ecf.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-1o0c6d/Debug/cmTC_30ecf.lib" /MACHINE:X64  /machine:x64 cmTC_30ecf.dir\\Debug\\CMakeCCompilerABI.obj
-          cmTC_30ecf.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1o0c6d\\Debug\\cmTC_30ecf.exe
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\Debug\\cmTC_568f4.exe" /INCREMENTAL /ILK:"cmTC_568f4.dir\\Debug\\cmTC_568f4.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam/Debug/cmTC_568f4.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-tzwmam/Debug/cmTC_568f4.lib" /MACHINE:X64  /machine:x64 cmTC_568f4.dir\\Debug\\CMakeCCompilerABI.obj
+          cmTC_568f4.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\Debug\\cmTC_568f4.exe
         FinalizeBuildStatus:
-          Deleting file "cmTC_30ecf.dir\\Debug\\cmTC_30ecf.tlog\\unsuccessfulbuild".
-          Touching "cmTC_30ecf.dir\\Debug\\cmTC_30ecf.tlog\\cmTC_30ecf.lastbuildstate".
-        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1o0c6d\\cmTC_30ecf.vcxproj" (default targets).
+          Deleting file "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\unsuccessfulbuild".
+          Touching "cmTC_568f4.dir\\Debug\\cmTC_568f4.tlog\\cmTC_568f4.lastbuildstate".
+        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tzwmam\\cmTC_568f4.vcxproj" (default targets).
         
         Build succeeded.
             0 Warning(s)
             0 Error(s)
         
-        Time Elapsed 00:00:01.02
+        Time Elapsed 00:00:00.61
         
       exitCode: 0
   -
@@ -1630,8 +1630,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-4df56q"
-      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-4df56q"
+      source: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7"
+      binary: "C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -1641,40 +1641,40 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-4df56q'
+        Change Dir: 'C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_88178.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_eaaf2.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         MSBuild version 17.12.12+1cce77968 for .NET Framework
-        Build started 8/27/2025 4:45:57 PM.
+        Build started 8/27/2025 5:48:01 PM.
         
-        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-4df56q\\cmTC_88178.vcxproj" on node 1 (default targets).
+        Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\cmTC_eaaf2.vcxproj" on node 1 (default targets).
         PrepareForBuild:
-          Creating directory "cmTC_88178.dir\\Debug\\".
+          Creating directory "cmTC_eaaf2.dir\\Debug\\".
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-4df56q\\Debug\\".
-          Creating directory "cmTC_88178.dir\\Debug\\cmTC_88178.tlog\\".
+          Creating directory "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\Debug\\".
+          Creating directory "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\".
         InitializeBuildStatus:
-          Creating "cmTC_88178.dir\\Debug\\cmTC_88178.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
-          Touching "cmTC_88178.dir\\Debug\\cmTC_88178.tlog\\unsuccessfulbuild".
+          Creating "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
+          Touching "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_88178.dir\\Debug\\\\" /Fd"cmTC_88178.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_eaaf2.dir\\Debug\\\\" /Fd"cmTC_eaaf2.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           Microsoft (R) C/C++ Optimizing Compiler Version 19.38.33144 for x64
           Copyright (C) Microsoft Corporation.  All rights reserved.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_88178.dir\\Debug\\\\" /Fd"cmTC_88178.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_eaaf2.dir\\Debug\\\\" /Fd"cmTC_eaaf2.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-4df56q\\Debug\\cmTC_88178.exe" /INCREMENTAL /ILK:"cmTC_88178.dir\\Debug\\cmTC_88178.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-4df56q/Debug/cmTC_88178.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-4df56q/Debug/cmTC_88178.lib" /MACHINE:X64  /machine:x64 cmTC_88178.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_88178.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-4df56q\\Debug\\cmTC_88178.exe
+          C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.38.33130\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\Debug\\cmTC_eaaf2.exe" /INCREMENTAL /ILK:"cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7/Debug/cmTC_eaaf2.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/jeanc/Documents/GitHub/AuraSync/CppSrc/build/CMakeFiles/CMakeScratch/TryCompile-lo25y7/Debug/cmTC_eaaf2.lib" /MACHINE:X64  /machine:x64 cmTC_eaaf2.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_eaaf2.vcxproj -> C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\Debug\\cmTC_eaaf2.exe
         FinalizeBuildStatus:
-          Deleting file "cmTC_88178.dir\\Debug\\cmTC_88178.tlog\\unsuccessfulbuild".
-          Touching "cmTC_88178.dir\\Debug\\cmTC_88178.tlog\\cmTC_88178.lastbuildstate".
-        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-4df56q\\cmTC_88178.vcxproj" (default targets).
+          Deleting file "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\unsuccessfulbuild".
+          Touching "cmTC_eaaf2.dir\\Debug\\cmTC_eaaf2.tlog\\cmTC_eaaf2.lastbuildstate".
+        Done Building Project "C:\\Users\\jeanc\\Documents\\GitHub\\AuraSync\\CppSrc\\build\\CMakeFiles\\CMakeScratch\\TryCompile-lo25y7\\cmTC_eaaf2.vcxproj" (default targets).
         
         Build succeeded.
             0 Warning(s)
             0 Error(s)
         
-        Time Elapsed 00:00:00.88
+        Time Elapsed 00:00:00.59
         
       exitCode: 0
   -
@@ -1714,7 +1714,7 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.1/Modules/FetchContent.cmake:2145:EVAL:2 (__FetchContent_doPopulation)"
       - "C:/Program Files/CMake/share/cmake-4.1/Modules/FetchContent.cmake:2145 (cmake_language)"
       - "C:/Program Files/CMake/share/cmake-4.1/Modules/FetchContent.cmake:2384 (__FetchContent_Populate)"
-      - "CMakeLists.txt:14 (FetchContent_MakeAvailable)"
+      - "CMakeLists.txt:20 (FetchContent_MakeAvailable)"
     mode: "program"
     variable: "GIT_EXECUTABLE"
     description: "Git command line client"
@@ -1776,9 +1776,9 @@ events:
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files/CMake/sbin/"
       - "C:/Program Files/CMake/"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/"
-      - "C:/Program Files (x86)/AuraSyncCpp/"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/"
       - "C:/Users/jeanc/AppData/Local/Atlassian/SourceTree/git_local/bin/"
     searched_directories:
       - "C:/Users/jeanc/AppData/Local/Programs/cursor/resources/app/bin/git.cmd.com"
@@ -1919,15 +1919,15 @@ events:
       - "C:/Program Files/CMake/git.cmd.com"
       - "C:/Program Files/CMake/git.cmd.exe"
       - "C:/Program Files/CMake/git.cmd"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/git.cmd.com"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/git.cmd.exe"
-      - "C:/Program Files (x86)/AuraSyncCpp/bin/git.cmd"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/git.cmd.com"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/git.cmd.exe"
-      - "C:/Program Files (x86)/AuraSyncCpp/sbin/git.cmd"
-      - "C:/Program Files (x86)/AuraSyncCpp/git.cmd.com"
-      - "C:/Program Files (x86)/AuraSyncCpp/git.cmd.exe"
-      - "C:/Program Files (x86)/AuraSyncCpp/git.cmd"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/git.cmd.com"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/git.cmd.exe"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/bin/git.cmd"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/git.cmd.com"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/git.cmd.exe"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/sbin/git.cmd"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/git.cmd.com"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/git.cmd.exe"
+      - "C:/Program Files (x86)/AudioVisualEngineAnalysis/git.cmd"
       - "C:/Users/jeanc/AppData/Local/Atlassian/SourceTree/git_local/bin/git.cmd.com"
       - "C:/Users/jeanc/AppData/Local/Atlassian/SourceTree/git_local/bin/git.cmd.exe"
       - "C:/Users/jeanc/AppData/Local/Atlassian/SourceTree/git_local/bin/git.cmd"
@@ -2032,10 +2032,10 @@ events:
         - "C:\\Users\\jeanc\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\Users\\jeanc\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\jeanc\\AppData\\Local\\Programs\\Ollama"
-      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/AuraSyncCpp"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/AudioVisualEngineAnalysis"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
         - "C:/Program Files (x86)"
         - "C:/Program Files/CMake"
-        - "C:/Program Files (x86)/AuraSyncCpp"
+        - "C:/Program Files (x86)/AudioVisualEngineAnalysis"
 ...
