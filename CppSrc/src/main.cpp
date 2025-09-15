@@ -6,6 +6,7 @@
 #include "../include/core/AudioBuffer.h"
 #include "../include/core/JsonContract.h"
 #include "../include/modules/BPMModule.h"
+#include "../include/modules/SpectralModule.h"
 #include "../include/pipeline/AudioLoader.h"
 
 // Forward declarations for fake module factories
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
         pipeline->registerModule(ave::modules::createFakeOnsetModule());
         pipeline->registerModule(ave::modules::createFakeStructureModule());
         pipeline->registerModule(ave::modules::createFakeTonalityModule());
-        pipeline->registerModule(ave::modules::createFakeSpectralModule());
+        pipeline->registerModule(ave::modules::createRealSpectralModule());
         pipeline->registerModule(ave::modules::createFakeCueModule());
 
         // Configure modules

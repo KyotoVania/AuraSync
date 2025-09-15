@@ -36,6 +36,7 @@ add_library(ave_core STATIC
 
         # Modules
         src/modules/RealBPMModule.cpp
+        src/modules/RealSpectralModule.cpp
         src/modules/FakeBPMModule.cpp
         src/modules/FakeModuleOnset.cpp
 )
