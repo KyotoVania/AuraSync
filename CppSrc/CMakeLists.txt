@@ -37,6 +37,8 @@ add_library(ave_core STATIC
         # Modules
         src/modules/RealBPMModule.cpp
         src/modules/RealSpectralModule.cpp
+        src/modules/RealOnsetModule.cpp
+        src/modules/RealTonalityModule.cpp
         src/modules/FakeBPMModule.cpp
         src/modules/FakeModuleOnset.cpp
 )
@@ -82,6 +84,15 @@ if(BUILD_TESTS)
             tests/test_modules.cpp
             tests/test_pipeline.cpp
             tests/test_json_contract.cpp
+            tests/test_onset_click.cpp
+            tests/test_onset_silence.cpp
+            tests/test_onset_ramp.cpp
+            tests/test_onset_click_var_bpm.cpp
+            tests/test_onset_accented.cpp
+            tests/test_onset_noise_bursts.cpp
+            tests/test_tonality_chroma.cpp
+            tests/test_tonality_cmajor.cpp
+            tests/test_tonality_aminor.cpp
     )
 
     target_link_libraries(ave_tests
