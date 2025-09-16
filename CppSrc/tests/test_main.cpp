@@ -17,6 +17,8 @@ bool test_onset_on_noise_bursts();
 bool test_tonality_chroma_on_a440();
 bool test_tonality_on_cmajor_scale();
 bool test_tonality_on_aminor_chord();
+bool test_structure_on_block_change();
+bool test_structure_on_constant_noise();
 
 int main() {
     int failed = 0;
@@ -49,6 +51,8 @@ int main() {
     run_test("test_tonality_chroma_on_a440", &test_tonality_chroma_on_a440);
     run_test("test_tonality_on_cmajor_scale", &test_tonality_on_cmajor_scale);
     run_test("test_tonality_on_aminor_chord", &test_tonality_on_aminor_chord);
+    run_test("test_structure_on_block_change", &test_structure_on_block_change);
+    run_test("test_structure_on_constant_noise", &test_structure_on_constant_noise);
 
     int passed = total - failed;
     std::cout << "Summary: " << passed << "/" << total << " passed, " << failed << " failed" << std::endl;

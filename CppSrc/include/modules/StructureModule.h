@@ -1,8 +1,16 @@
 ﻿//
-// Created by jeanc on 8/27/2025.
+// Created by Junie (AI) on 2025-09-16.
 //
+#ifndef AVE_MODULES_STRUCTUREMODULE_H
+#define AVE_MODULES_STRUCTUREMODULE_H
 
-#ifndef AURASYNC_STRUCTUREMODULE_H
-#define AURASYNC_STRUCTUREMODULE_H
+#include <memory>
 
-#endif //AURASYNC_STRUCTUREMODULE_H
+namespace ave { namespace core { class IAnalysisModule; } }
+
+namespace ave { namespace modules {
+    // Factory for the real structure (segmentation) module
+    std::unique_ptr<ave::core::IAnalysisModule> createRealStructureModule();
+} }
+
+#endif // AVE_MODULES_STRUCTUREMODULE_H

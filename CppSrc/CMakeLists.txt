@@ -39,6 +39,7 @@ add_library(ave_core STATIC
         src/modules/RealSpectralModule.cpp
         src/modules/RealOnsetModule.cpp
         src/modules/RealTonalityModule.cpp
+        src/modules/RealStructureModule.cpp
         src/modules/FakeBPMModule.cpp
         src/modules/FakeModuleOnset.cpp
 )
@@ -89,6 +90,8 @@ if(BUILD_TESTS)
             tests/test_tonality_chroma.cpp
             tests/test_tonality_cmajor.cpp
             tests/test_tonality_aminor.cpp
+            tests/test_structure_blocks.cpp
+            tests/test_structure_constant.cpp
     )
 
     if(AVE_BUILD_ONSET_TESTS)

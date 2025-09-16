@@ -10,6 +10,7 @@
 #include "../include/modules/SpectralModule.h"
 #include "../include/modules/OnsetModule.h"
 #include "../include/modules/TonalityModule.h"
+#include "../include/modules/StructureModule.h"
 #include "../include/pipeline/AudioLoader.h"
 
 // Forward declarations for fake module factories
@@ -66,7 +67,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Registering modules..." << std::endl;
         pipeline->registerModule(ave::modules::createRealBPMModule());
         pipeline->registerModule(ave::modules::createRealOnsetModule());
-        pipeline->registerModule(ave::modules::createFakeStructureModule());
+        pipeline->registerModule(ave::modules::createRealStructureModule());
         pipeline->registerModule(ave::modules::createRealTonalityModule());
         pipeline->registerModule(ave::modules::createRealSpectralModule());
         pipeline->registerModule(ave::modules::createFakeCueModule());
