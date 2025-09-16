@@ -40,6 +40,7 @@ add_library(ave_core STATIC
         src/modules/RealOnsetModule.cpp
         src/modules/RealTonalityModule.cpp
         src/modules/RealStructureModule.cpp
+        src/modules/RealCueModule.cpp
         src/modules/FakeBPMModule.cpp
         src/modules/FakeModuleOnset.cpp
 )
@@ -92,6 +93,7 @@ if(BUILD_TESTS)
             tests/test_tonality_aminor.cpp
             tests/test_structure_blocks.cpp
             tests/test_structure_constant.cpp
+            tests/test_cue_synthesis.cpp
     )
 
     if(AVE_BUILD_ONSET_TESTS)

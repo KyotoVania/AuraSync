@@ -13,13 +13,13 @@
 #include "../include/modules/StructureModule.h"
 #include "../include/pipeline/AudioLoader.h"
 
-// Forward declarations for fake module factories
+// Forward declarations for module factories
 namespace ave::modules {
     std::unique_ptr<ave::core::IAnalysisModule> createFakeOnsetModule();
     std::unique_ptr<ave::core::IAnalysisModule> createFakeStructureModule();
     std::unique_ptr<ave::core::IAnalysisModule> createFakeTonalityModule();
     std::unique_ptr<ave::core::IAnalysisModule> createFakeSpectralModule();
-    std::unique_ptr<ave::core::IAnalysisModule> createFakeCueModule();
+    std::unique_ptr<ave::core::IAnalysisModule> createRealCueModule();
 }
 
 // Real audio loader using WAV reader
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
         pipeline->registerModule(ave::modules::createRealStructureModule());
         pipeline->registerModule(ave::modules::createRealTonalityModule());
         pipeline->registerModule(ave::modules::createRealSpectralModule());
-        pipeline->registerModule(ave::modules::createFakeCueModule());
+        pipeline->registerModule(ave::modules::createRealCueModule());
 
         // Configure modules
         pipeline->setModuleConfig("BPM", {
