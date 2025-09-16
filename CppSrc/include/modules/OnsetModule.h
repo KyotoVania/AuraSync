@@ -1,8 +1,8 @@
 ﻿//
 // Created by Junie (AI) on 2025-09-15.
 //
-#ifndef AURASYNC_ONSETMODULE_H
-#define AURASYNC_ONSETMODULE_H
+#ifndef AVE_MODULES_ONSETMODULE_H
+#define AVE_MODULES_ONSETMODULE_H
 
 #include <memory>
 
@@ -13,4 +13,4 @@ namespace ave { namespace modules {
     std::unique_ptr<ave::core::IAnalysisModule> createRealOnsetModule();
 } }
 
-#endif // AURASYNC_ONSETMODULE_H
+#endif // AVE_MODULES_ONSETMODULE_H

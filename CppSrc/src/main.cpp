@@ -2,6 +2,7 @@
 #include <fstream>
 #include <chrono>
 #include <memory>
+#include <cstdlib>
 #include "../include/pipeline/AnalysisPipeline.h"
 #include "../include/core/AudioBuffer.h"
 #include "../include/core/JsonContract.h"
@@ -25,11 +26,19 @@ ave::core::AudioBuffer loadAudioFile(const std::string& path) {
     try {
         return ave::pipeline::AudioLoader::loadWav(path);
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load WAV ('" << path << "'): " << e.what() << "\nFalling back to silence for demo." << std::endl;
-        // Fallback: 10s of silence stereo
-        size_t sampleRate = 44100;
-        size_t durationSec = 10;
-        size_t channels = 2;
+        // Configurable fallback via environment variables
+        const char* envDur = std::getenv("AVE_FALLBACK_DURATION_SEC");
+        const char* envCh = std::getenv("AVE_FALLBACK_CHANNELS");
+        const char* envSr = std::getenv("AVE_FALLBACK_SR");
+        size_t durationSec = envDur ? static_cast<size_t>(std::strtoul(envDur, nullptr, 10)) : 10;
+        size_t channels = envCh ? static_cast<size_t>(std::strtoul(envCh, nullptr, 10)) : 2;
+        size_t sampleRate = envSr ? static_cast<size_t>(std::strtoul(envSr, nullptr, 10)) : 44100;
+        if (durationSec == 0) durationSec = 10;
+        if (channels == 0) channels = 2;
+        if (sampleRate == 0) sampleRate = 44100;
+        std::cerr << "Failed to load WAV ('" << path << "'): " << e.what() << std::endl;
+        std::cerr << "Falling back to silence buffer (configurable): duration=" << durationSec
+                  << "s, channels=" << channels << ", sampleRate=" << sampleRate << std::endl;
         size_t frames = sampleRate * durationSec;
         ave::core::AudioBuffer buffer(channels, frames, static_cast<float>(sampleRate));
         return buffer;

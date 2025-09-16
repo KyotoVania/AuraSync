@@ -79,21 +79,30 @@ if(BUILD_TESTS)
     enable_testing()
 
     # Test executable
-    add_executable(ave_tests
+    option(AVE_BUILD_ONSET_TESTS "Build granular onset tests" ON)
+
+    set(AVE_TEST_SOURCES
             tests/test_main.cpp
             tests/test_modules.cpp
             tests/test_pipeline.cpp
             tests/test_json_contract.cpp
-            tests/test_onset_click.cpp
-            tests/test_onset_silence.cpp
-            tests/test_onset_ramp.cpp
-            tests/test_onset_click_var_bpm.cpp
-            tests/test_onset_accented.cpp
-            tests/test_onset_noise_bursts.cpp
             tests/test_tonality_chroma.cpp
             tests/test_tonality_cmajor.cpp
             tests/test_tonality_aminor.cpp
     )
+
+    if(AVE_BUILD_ONSET_TESTS)
+        list(APPEND AVE_TEST_SOURCES
+                tests/test_onset_click.cpp
+                tests/test_onset_silence.cpp
+                tests/test_onset_ramp.cpp
+                tests/test_onset_click_var_bpm.cpp
+                tests/test_onset_accented.cpp
+                tests/test_onset_noise_bursts.cpp
+        )
+    endif()
+
+    add_executable(ave_tests ${AVE_TEST_SOURCES})
 
     target_link_libraries(ave_tests
             PRIVATE

@@ -2,6 +2,7 @@
 // Created by jeanc on 8/27/2025.
 //
 #include <iostream>
+#include <cstdlib>
 
 // Declarations of test functions
 bool test_bpm_on_clicktrack();
@@ -19,110 +20,38 @@ bool test_tonality_on_aminor_chord();
 
 int main() {
     int failed = 0;
+    int total = 0;
 
-    std::cout << "Running tests..." << std::endl;
+    const char* quietEnv = std::getenv("AVE_TEST_QUIET");
+    bool quiet = quietEnv && std::string(quietEnv) != "0";
 
-    std::cout << "- test_bpm_on_clicktrack: ";
-    if (test_bpm_on_clicktrack()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
+    if (!quiet) std::cout << "Running tests..." << std::endl;
 
-    std::cout << "- test_spectral_on_sine_1000hz: ";
-    if (test_spectral_on_sine_1000hz()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
+    // Helper macro to run a test with optional verbose output
+    auto run_test = [&](const char* name, bool (*fn)()) {
+        ++total;
+        bool ok = fn();
+        if (!quiet) {
+            std::cout << "- " << name << ": " << (ok ? "PASS" : "FAIL") << std::endl;
+        }
+        if (!ok) ++failed;
+    };
 
-    std::cout << "- test_spectral_on_white_noise: ";
-    if (test_spectral_on_white_noise()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
+    run_test("test_bpm_on_clicktrack", &test_bpm_on_clicktrack);
+    run_test("test_spectral_on_sine_1000hz", &test_spectral_on_sine_1000hz);
+    run_test("test_spectral_on_white_noise", &test_spectral_on_white_noise);
+    run_test("test_onset_on_clicktrack", &test_onset_on_clicktrack);
+    run_test("test_onset_on_silence", &test_onset_on_silence);
+    run_test("test_onset_on_ramp", &test_onset_on_ramp);
+    run_test("test_onset_on_clicktrack_90bpm", &test_onset_on_clicktrack_90bpm);
+    run_test("test_onset_on_accented_clicks", &test_onset_on_accented_clicks);
+    run_test("test_onset_on_noise_bursts", &test_onset_on_noise_bursts);
+    run_test("test_tonality_chroma_on_a440", &test_tonality_chroma_on_a440);
+    run_test("test_tonality_on_cmajor_scale", &test_tonality_on_cmajor_scale);
+    run_test("test_tonality_on_aminor_chord", &test_tonality_on_aminor_chord);
 
-    std::cout << "- test_onset_on_clicktrack: ";
-    if (test_onset_on_clicktrack()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
+    int passed = total - failed;
+    std::cout << "Summary: " << passed << "/" << total << " passed, " << failed << " failed" << std::endl;
 
-    std::cout << "- test_onset_on_silence: ";
-    if (test_onset_on_silence()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_onset_on_ramp: ";
-    if (test_onset_on_ramp()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_onset_on_clicktrack_90bpm: ";
-    if (test_onset_on_clicktrack_90bpm()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_onset_on_accented_clicks: ";
-    if (test_onset_on_accented_clicks()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_onset_on_noise_bursts: ";
-    if (test_onset_on_noise_bursts()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_tonality_chroma_on_a440: ";
-    if (test_tonality_chroma_on_a440()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_tonality_on_cmajor_scale: ";
-    if (test_tonality_on_cmajor_scale()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    std::cout << "- test_tonality_on_aminor_chord: ";
-    if (test_tonality_on_aminor_chord()) {
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL" << std::endl;
-        failed++;
-    }
-
-    if (failed == 0) {
-        std::cout << "All tests passed" << std::endl;
-        return 0;
-    } else {
-        std::cout << failed << " test(s) failed" << std::endl;
-        return 1;
-    }
+    return failed == 0 ? 0 : 1;
 }
