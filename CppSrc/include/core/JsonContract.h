@@ -45,7 +45,10 @@ public:
             };
         }
         
-        if (moduleResults.count("Structure")) {
+        // Structure segments - prefer enhanced segments from Cue module
+        if (moduleResults.count("Cue") && moduleResults.at("Cue").contains("segments")) {
+            output["structure"] = moduleResults.at("Cue")["segments"];
+        } else if (moduleResults.count("Structure")) {
             output["structure"] = moduleResults.at("Structure")["segments"];
         }
         
@@ -71,8 +74,15 @@ public:
             output["features"]["onsets"] = compressOnsets(moduleResults.at("Onset")["onsets"]);
         }
         
+        // Cue module outputs
         if (moduleResults.count("Cue")) {
-            output["cues"] = moduleResults.at("Cue")["cues"];
+            const auto& cueResult = moduleResults.at("Cue");
+            if (cueResult.contains("cues")) {
+                output["cues"] = cueResult["cues"];
+            }
+            if (cueResult.contains("phasedBeats")) {
+                output["tempo"]["phasedBeats"] = cueResult["phasedBeats"];
+            }
         }
         
         // Analysis metadata

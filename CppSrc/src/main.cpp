@@ -74,8 +74,8 @@ int main(int argc, char* argv[]) {
 
         // Configure modules
         pipeline->setModuleConfig("BPM", {
-            {"minBPM", 60},
-            {"maxBPM", 180},
+            {"minBPM", 20},
+            {"maxBPM", 220},
             {"frameSize", 1024},
             {"hopSize", 512},
             {"acfWindowSec", 8.0},
