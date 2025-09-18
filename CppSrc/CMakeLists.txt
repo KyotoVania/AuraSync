@@ -41,8 +41,6 @@ add_library(ave_core STATIC
         src/modules/RealTonalityModule.cpp
         src/modules/RealStructureModule.cpp
         src/modules/RealCueModule.cpp
-        src/modules/FakeBPMModule.cpp
-        src/modules/FakeModuleOnset.cpp
 )
 
 target_include_directories(ave_core
