@@ -417,46 +417,76 @@ std::vector<double> RealBPMModule::trackBeatsWithDynamicProgramming(
 double RealBPMModule::computeTransitionCost(const BeatCandidate& prev, const BeatCandidate& current, 
                                           const std::vector<std::vector<double>>& tempogram, double frameRate) {
     double interval = current.time - prev.time;
+    if (interval <= 0.0) return -1e9;
     double impliedBPM = 60.0 / interval;
-    
+
     // Base cost: prefer intervals that match tempogram
     double tempogramSupport = 0.0;
-    
+    double harmonicBonus = 0.0;
+    double tempoChangePenalty = 0.0;
+
     // Find tempogram frame for current beat
-    double tempogramWindowSec = 4.0;
-    size_t tempogramHop = static_cast<size_t>(tempogramWindowSec * frameRate / 4);
-    size_t frameIndex = static_cast<size_t>(current.time * frameRate);
+    const double tempogramWindowSec = 4.0;
+    const size_t tempogramHop = static_cast<size_t>(tempogramWindowSec * frameRate / 4);
+    const size_t frameIndex = static_cast<size_t>(current.time * frameRate);
     size_t tempogramIndex = frameIndex / tempogramHop;
-    
-    if (tempogramIndex < tempogram.size()) {
-        // Find BPM bin in tempogram
-        const double minBPM = static_cast<double>(m_cfg.minBPM);
-        const double maxBPM = static_cast<double>(m_cfg.maxBPM);
-        
-        double logMinBPM = std::log(minBPM);
-        double logMaxBPM = std::log(maxBPM);
+
+    const double minBPM = static_cast<double>(m_cfg.minBPM);
+    const double maxBPM = static_cast<double>(m_cfg.maxBPM);
+
+    if (!tempogram.empty()) {
+        if (tempogramIndex >= tempogram.size()) {
+            tempogramIndex = tempogram.size() - 1;
+        }
+        const int tempoBins = static_cast<int>(tempogram[0].size());
+        const double logMinBPM = std::log(minBPM);
+        const double logMaxBPM = std::log(maxBPM);
+
+        // Support at implied BPM bin
         double logImpliedBPM = std::log(impliedBPM);
-        
-        double binFloat = (logImpliedBPM - logMinBPM) / (logMaxBPM - logMinBPM) * (tempogram[0].size() - 1);
-        int bin = std::max(0, std::min<int>(static_cast<int>(tempogram[0].size()) - 1, static_cast<int>(binFloat)));
-        
+        double binFloat = (logImpliedBPM - logMinBPM) / (logMaxBPM - logMinBPM) * (tempoBins - 1);
+        int bin = std::max(0, std::min(tempoBins - 1, static_cast<int>(binFloat)));
         tempogramSupport = tempogram[tempogramIndex][bin];
+
+        // Find dominant local BPM from tempogram at this time
+        const auto& row = tempogram[tempogramIndex];
+        int domBin = static_cast<int>(std::max_element(row.begin(), row.end()) - row.begin());
+        double domLogBPM = logMinBPM + (logMaxBPM - logMinBPM) * (static_cast<double>(domBin) / (tempoBins - 1));
+        double dominantBPM = std::exp(domLogBPM);
+
+        // Harmonic relationship bonus between implied and dominant tempo
+        if (dominantBPM > 0.0) {
+            double ratio = impliedBPM / dominantBPM;
+            double tolStrong = 0.08;  // ~8% tolerance
+            double tolWeak = 0.06;
+            auto near = [](double x, double t, double tol){ return std::abs(x - t) < tol; };
+            if (near(ratio, 1.0, tolStrong)) {
+                harmonicBonus += 0.25;
+            } else if (near(ratio, 2.0, tolStrong) || near(ratio, 0.5, tolStrong)) {
+                harmonicBonus += 0.15;
+            } else if (near(ratio, 1.5, tolWeak) || near(ratio, 2.0/3.0, tolWeak)) {
+                harmonicBonus += 0.10;
+            }
+
+            // Tempo change penalty if deviating strongly from dominant tempo
+            if (ratio < 0.67 || ratio > 1.5) {
+                tempoChangePenalty = 0.20;
+            } else if (ratio < 0.8 || ratio > 1.25) {
+                tempoChangePenalty = 0.10;
+            }
+        }
     }
-    
-    // Musical preference: favor common BPM ranges
+
+    // Musical preference: favor common BPM ranges (reduced to avoid bias)
     double musicalBonus = 0.0;
     if (impliedBPM >= 100.0 && impliedBPM <= 140.0) {
-        musicalBonus = 0.5;  // Strong preference for typical dance/pop music range
+        musicalBonus = 0.30;  // Reduced bias vs previous 0.5
     } else if (impliedBPM >= 80.0 && impliedBPM <= 180.0) {
-        musicalBonus = 0.2;  // Moderate preference for extended typical range
+        musicalBonus = 0.15;  // Reduced bias vs previous 0.2
     }
-    
-    // Tempo change penalty: penalize sudden tempo changes
-    double tempoChangePenalty = 0.0;
-    // This would require tracking previous tempo - simplified for now
-    
+
     // Combined transition cost (higher is better)
-    return tempogramSupport + musicalBonus - tempoChangePenalty;
+    return tempogramSupport + harmonicBonus + musicalBonus - tempoChangePenalty;
 }
 
 // Helper method to fill missing beats using interpolation
