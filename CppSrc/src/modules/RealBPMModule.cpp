@@ -198,7 +198,7 @@ std::vector<RealBPMModule::BeatCandidate> RealBPMModule::detectBeatCandidates(co
     if (odf.size() < 5) return candidates;
     
     // Adaptive threshold based on local statistics
-    const size_t windowSize = static_cast<size_t>(frameRate * 0.5); // 500ms window
+    const size_t windowSize = static_cast<size_t>(frameRate * 0.5); // ~500ms window
     std::vector<double> localMean(odf.size());
     std::vector<double> localStd(odf.size());
     
@@ -217,26 +217,35 @@ std::vector<RealBPMModule::BeatCandidate> RealBPMModule::detectBeatCandidates(co
         localStd[i] = std::sqrt(std::max(0.0, sumSq/count - localMean[i]*localMean[i]));
     }
     
-    // Find peaks using adaptive threshold
+    // Non-maximum suppression within a minimum interval window
     const double minPeakInterval = 60.0 / 300.0; // Minimum 300 BPM (maximum tempo)
-    size_t minPeakFrames = static_cast<size_t>(minPeakInterval * frameRate);
-    size_t lastPeakFrame = 0;
+    const size_t minPeakFrames = static_cast<size_t>(minPeakInterval * frameRate);
     
-    for (size_t i = 2; i < odf.size() - 2; ++i) {
-        // Check if it's a local maximum
-        if (odf[i] > odf[i-1] && odf[i] > odf[i+1] && 
-            odf[i] > odf[i-2] && odf[i] > odf[i+2]) {
-            
-            // Adaptive threshold: mean + factor * std
-            double threshold = localMean[i] + 1.5 * localStd[i];
-            
-            // Minimum absolute threshold
+    for (size_t i = 2; i + 2 < odf.size(); ++i) {
+        // Check for strict local maximum over a 5-sample neighborhood
+        if (odf[i] > odf[i-1] && odf[i] > odf[i+1] && odf[i] > odf[i-2] && odf[i] > odf[i+2]) {
+            // Adaptive threshold: mean + 1.0 * std (more sensitive than previous 1.5)
+            double threshold = localMean[i] + 1.0 * localStd[i];
             threshold = std::max(threshold, 0.01);
             
-            if (odf[i] > threshold && (i - lastPeakFrame) >= minPeakFrames) {
-                double time = static_cast<double>(i) / frameRate;
-                candidates.emplace_back(time, odf[i], i);
-                lastPeakFrame = i;
+            if (odf[i] > threshold) {
+                bool suppressed = false;
+                // If a previous candidate is too close in time, keep the stronger one
+                if (!candidates.empty()) {
+                    size_t lastIdx = candidates.back().frameIndex;
+                    if (i > lastIdx && (i - lastIdx) < minPeakFrames) {
+                        if (odf[i] > candidates.back().strength) {
+                            // Replace the previous (we keep only the stronger peak within the window)
+                            candidates.pop_back();
+                        } else {
+                            suppressed = true;
+                        }
+                    }
+                }
+                if (!suppressed) {
+                    double time = static_cast<double>(i) / frameRate;
+                    candidates.emplace_back(time, odf[i], i);
+                }
             }
         }
     }

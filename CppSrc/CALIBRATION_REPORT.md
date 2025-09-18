@@ -163,3 +163,29 @@ Itération 1 – Implémentation H1 (minimale, isolée)
 - Décision: Conserver (pas de régression), planifier H2/H3 pour la prochaine itération.
 
 Prochaine étape: Implémenter H3 (détection adaptative) de façon isolée puis H2 (ODF multi-bandes) si besoin; viser >95% de réussite sans régression.
+
+
+### Iteration 2 – H3: Adaptive Beat Candidate Detection (v2.0.0-beattracking)
+
+Hypothesis: Rigid peak spacing and conservative thresholds in candidate detection were suppressing valid beats, especially in slow/fast tempos and complex passages.
+
+Change implemented:
+- Threshold lowered from mean + 1.5*std to mean + 1.0*std (higher sensitivity).
+- Introduced non-maximum suppression (NMS) within a minimum interval window instead of rigid spacing; if two peaks are too close, keep the stronger.
+
+Code location:
+- src/modules/RealBPMModule.cpp → detectBeatCandidates(...)
+
+Validation (baseline_test.ps1):
+- Previous: 6/8 successes (75%), 0 octave errors.
+- Now: 8/8 successes (100%), 0 octave errors, Average confidence ≈ 0.382.
+- Notable fixes:
+  - SimonTheDivergentStar116BpmFm.wav: 123.05 BPM (error 6.08%) → SUCCESS.
+  - TsukisayuYoru163BpmF#G.wav: 152.00 BPM (error 6.75%) → SUCCESS.
+
+Side effects:
+- No regressions observed; all unit tests (15/15) pass.
+- Confidence scores remained reasonable; some tracks show modest shifts reflecting better interval consistency.
+
+Next steps:
+- If needed, proceed to H2 (multi-band ODF) to further raise confidence and robustness on dense textures while maintaining current success rate.
