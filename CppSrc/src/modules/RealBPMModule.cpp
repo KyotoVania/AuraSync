@@ -26,6 +26,29 @@ public:
         if (config.contains("acfWindowSec")) m_acfWindowSec = std::max(1.0, config["acfWindowSec"].get<double>());
         if (config.contains("historySize")) m_historySize = std::max<size_t>(1, config["historySize"].get<size_t>());
         if (config.contains("octaveCorrection")) m_octaveCorrection = config["octaveCorrection"].get<bool>();
+        if (config.contains("qmLike")) m_qmLike = config["qmLike"].get<bool>();
+        if (config.contains("fixedTempo")) m_fixedTempo = config["fixedTempo"].get<bool>();
+        if (config.contains("fastAnalysisSeconds")) {
+            double fas = config["fastAnalysisSeconds"].get<double>();
+            if (fas > 0.0) {
+                // Clamp to [10,45] seconds when enabled
+                m_fastAnalysisSec = std::max(10.0, std::min(45.0, fas));
+            } else {
+                m_fastAnalysisSec = 0.0;
+            }
+        }
+        // R4: Hybrid tempogram configuration
+        if (config.contains("hybridTempogram")) m_hybridTempogram = config["hybridTempogram"].get<bool>();
+        if (config.contains("combLambda")) {
+            double lam = config["combLambda"].get<double>();
+            if (lam < 0.0) lam = 0.0; if (lam > 1.0) lam = 1.0;
+            m_combLambda = lam;
+        }
+        if (config.contains("combHarmonics")) {
+            int Hc = config["combHarmonics"].get<int>();
+            if (Hc < 2) Hc = 2; if (Hc > 8) Hc = 8;
+            m_combHarmonics = Hc;
+        }
         if (m_cfg.minBPM < 30.f) m_cfg.minBPM = 30.f;
         if (m_cfg.maxBPM > 240.f) m_cfg.maxBPM = 240.f;
         if (m_cfg.minBPM > m_cfg.maxBPM) std::swap(m_cfg.minBPM, m_cfg.maxBPM);
@@ -38,13 +61,31 @@ public:
 
     nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext&) override {
         const float sr = audio.getSampleRate();
+        m_octaveSwitchedLast = false; // reset health flag per track
         if (audio.getFrameCount() == 0 || audio.getChannelCount() == 0) {
             return makeResultFallback(audio.getDuration());
         }
 
         std::vector<float> mono = audio.getMono();
-        const size_t N = m_cfg.frameSize;
-        const size_t H = m_cfg.hopSize;
+        size_t N = m_cfg.frameSize;
+        size_t H = m_cfg.hopSize;
+        if (m_qmLike) {
+            size_t hopQM = static_cast<size_t>(std::llround(sr * 0.01161));
+            if (hopQM < 1) hopQM = 1;
+            auto nextPow2 = [](size_t x){ size_t p = 1; while (p < x) p <<= 1; return p; };
+            size_t frameQM = nextPow2(static_cast<size_t>(std::ceil(sr / 50.0)));
+            if (frameQM < 256) frameQM = 256;
+            if (hopQM > frameQM) hopQM = std::max<size_t>(1, frameQM / 4);
+            N = frameQM;
+            H = hopQM;
+        }
+        // Fast analysis: optionally limit analysis to the first m_fastAnalysisSec seconds
+        if (m_fastAnalysisSec > 0.0) {
+            size_t maxSamples = static_cast<size_t>(std::llround(std::min<double>(mono.size(), m_fastAnalysisSec * sr)));
+            if (maxSamples >= N) {
+                mono.resize(maxSamples);
+            }
+        }
         if (mono.size() < N || N < 256) return makeResultFallback(audio.getDuration());
 
         const double frameRate = sr / static_cast<double>(H);
@@ -90,6 +131,15 @@ private:
     double m_acfWindowSec = 8.0; // seconds (kept for compatibility)
     size_t m_historySize = 10;
     bool m_octaveCorrection = true;
+    bool m_qmLike = false;
+    bool m_fixedTempo = false;
+    double m_fastAnalysisSec = 0.0;
+    // R4: Hybrid tempogram (ACF + comb-like evidence)
+    bool m_hybridTempogram = false;
+    double m_combLambda = 0.3; // blend weight for COMB in [0,1]
+    int m_combHarmonics = 4;   // number of harmonics for comb evidence
+    // C2: Health flags support
+    bool m_octaveSwitchedLast = false; // set true if octave correction selected an alternate grid
     std::vector<float> m_history;
     
     // New beat tracking methods
@@ -97,14 +147,17 @@ private:
     std::vector<BeatCandidate> detectBeatCandidates(const std::vector<double>& odf, double frameRate);
     std::vector<std::vector<double>> computeTempogram(const std::vector<double>& odf, double frameRate);
     std::vector<double> trackBeatsWithDynamicProgramming(const std::vector<BeatCandidate>& candidates, 
-                                                        const std::vector<std::vector<double>>& tempogram, 
-                                                        double frameRate, double duration);
+                                                       const std::vector<std::vector<double>>& tempogram, 
+                                                       double frameRate, double duration);
     nlohmann::json generateBeatTrackingResult(const std::vector<double>& beatTimes, double duration);
     
     // Helper methods for dynamic programming
     double computeTransitionCost(const BeatCandidate& prev, const BeatCandidate& current, 
                                const std::vector<std::vector<double>>& tempogram, double frameRate);
     void fillMissingBeats(std::vector<double>& beatTimes, double duration);
+    std::vector<double> postProcessOctaveCorrection(const std::vector<double>& beatTimes,
+                                                    double duration,
+                                                    const std::vector<std::vector<double>>& tempogram);
 
     static nlohmann::json makeResult(double bpm, double conf, float interval,
                                      const nlohmann::json& grid, const nlohmann::json& downbeats) {
@@ -281,6 +334,11 @@ std::vector<std::vector<double>> RealBPMModule::computeTempogram(const std::vect
         // Extract window
         std::vector<double> window(odf.begin() + start, odf.begin() + start + windowFrames);
         
+        // Precompute window energy for comb normalization
+        double windowEnergy = 0.0;
+        for (double v : window) windowEnergy += v * v;
+        if (windowEnergy < 1e-12) windowEnergy = 1e-12;
+        
         // For each tempo candidate, compute autocorrelation strength
         for (int t = 0; t < tempoBins; ++t) {
             double bpm = tempoCandidates[t];
@@ -322,6 +380,31 @@ std::vector<std::vector<double>> RealBPMModule::computeTempogram(const std::vect
                     }
                     if (norm > 1e-10) {
                         tempoSalience[t] += 0.3 * (autocorr3 / norm); // Weaker contribution
+                    }
+                }
+                
+                // R4: Hybrid tempogram comb-like blending
+                if (m_hybridTempogram) {
+                    int Hcomb = std::max(2, m_combHarmonics);
+                    double combSum = 0.0;
+                    double wsum = 0.0;
+                    for (int h = 1; h <= Hcomb; ++h) {
+                        size_t lagH = static_cast<size_t>(h * lag);
+                        if (lagH < static_cast<size_t>(windowFrames) - 1) {
+                            double acch = 0.0;
+                            for (size_t i = 0; i < windowFrames - lagH; ++i) {
+                                acch += window[i] * window[i + lagH];
+                            }
+                            double w = 1.0 / static_cast<double>(h * h);
+                            double corrh = acch / windowEnergy;
+                            combSum += w * corrh;
+                            wsum += w;
+                        }
+                    }
+                    if (wsum > 0.0) {
+                        double comb = combSum / wsum;
+                        double lam = std::max(0.0, std::min(1.0, m_combLambda));
+                        tempoSalience[t] = (1.0 - lam) * tempoSalience[t] + lam * comb;
                     }
                 }
             }
@@ -419,6 +502,11 @@ std::vector<double> RealBPMModule::trackBeatsWithDynamicProgramming(
         fillMissingBeats(beatTimes, duration);
     }
     
+    // Octave correction post-processing
+    if (m_octaveCorrection) {
+        beatTimes = postProcessOctaveCorrection(beatTimes, duration, tempogram);
+    }
+    
     return beatTimes;
 }
 
@@ -478,10 +566,18 @@ double RealBPMModule::computeTransitionCost(const BeatCandidate& prev, const Bea
             }
 
             // Tempo change penalty if deviating strongly from dominant tempo
-            if (ratio < 0.67 || ratio > 1.5) {
-                tempoChangePenalty = 0.20;
-            } else if (ratio < 0.8 || ratio > 1.25) {
-                tempoChangePenalty = 0.10;
+            if (m_fixedTempo) {
+                if (ratio < 0.90 || ratio > 1.10) {
+                    tempoChangePenalty = 0.30;
+                } else if (ratio < 0.95 || ratio > 1.05) {
+                    tempoChangePenalty = 0.15;
+                }
+            } else {
+                if (ratio < 0.67 || ratio > 1.5) {
+                    tempoChangePenalty = 0.20;
+                } else if (ratio < 0.8 || ratio > 1.25) {
+                    tempoChangePenalty = 0.10;
+                }
             }
         }
     }
@@ -538,60 +634,242 @@ void RealBPMModule::fillMissingBeats(std::vector<double>& beatTimes, double dura
     beatTimes = allBeats;
 }
 
+// Post-processing: Octave correction (0.5x/1x/2x)
+std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector<double>& beatTimes,
+                                                              double duration,
+                                                              const std::vector<std::vector<double>>& tempogram) {
+    if (beatTimes.size() < 2) return beatTimes;
+
+    // Compute base interval and BPMs
+    std::vector<double> intervals;
+    intervals.reserve(beatTimes.size() - 1);
+    for (size_t i = 1; i < beatTimes.size(); ++i) {
+        double d = beatTimes[i] - beatTimes[i-1];
+        if (d > 0.0) intervals.push_back(d);
+    }
+    if (intervals.empty()) return beatTimes;
+    std::sort(intervals.begin(), intervals.end());
+    double medianInterval = intervals[intervals.size() / 2];
+    double bpm1x = 60.0 / medianInterval;
+    double bpm05 = bpm1x * 0.5;
+    double bpm2x = bpm1x * 2.0;
+
+    auto clamp01 = [](double x){ return std::max(0.0, std::min(1.0, x)); };
+
+    auto makeGrid = [&](double bpm){
+        double interval = 60.0 / bpm;
+        // Anchor grid to first detected beat
+        double start = beatTimes.front();
+        // backfill to zero to cover intro
+        while (start - interval > 0.0) start -= interval;
+        std::vector<double> grid;
+        for (double t = start; t <= duration + 1e-6; t += interval) grid.push_back(t);
+        return grid;
+    };
+
+    auto tempogramEvidence = [&](double bpm){
+        if (tempogram.empty()) return 0.0;
+        const double minBPM = static_cast<double>(m_cfg.minBPM);
+        const double maxBPM = static_cast<double>(m_cfg.maxBPM);
+        const int tempoBins = static_cast<int>(tempogram[0].size());
+        if (bpm < minBPM || bpm > maxBPM || tempoBins <= 0) return 0.0;
+        double logMinBPM = std::log(minBPM);
+        double logMaxBPM = std::log(maxBPM);
+        double logBPM = std::log(bpm);
+        double binFloat = (logBPM - logMinBPM) / (logMaxBPM - logMinBPM) * (tempoBins - 1);
+        int bin = std::max(0, std::min(tempoBins - 1, static_cast<int>(binFloat)));
+        double sum = 0.0;
+        for (const auto& row : tempogram) sum += row[bin];
+        return (tempogram.size() > 0) ? sum / static_cast<double>(tempogram.size()) : 0.0;
+    };
+
+    auto coverageMatch = [&](const std::vector<double>& grid){
+        if (grid.empty()) return 0.0;
+        double interval = (grid.size() >= 2) ? (grid[1] - grid[0]) : medianInterval;
+        double tol = 0.1 * interval;
+        // fraction of detected beats close to grid
+        size_t i = 0, j = 0; size_t closeDet = 0;
+        while (i < beatTimes.size() && j < grid.size()) {
+            double diff = beatTimes[i] - grid[j];
+            if (std::abs(diff) <= tol) { ++closeDet; ++i; ++j; }
+            else if (diff > 0) { ++j; } else { ++i; }
+        }
+        double fracDet = static_cast<double>(closeDet) / static_cast<double>(beatTimes.size());
+        // fraction of grid beats close to detected beats
+        i = 0; j = 0; size_t closeGrid = 0;
+        while (i < beatTimes.size() && j < grid.size()) {
+            double diff = grid[j] - beatTimes[i];
+            if (std::abs(diff) <= tol) { ++closeGrid; ++i; ++j; }
+            else if (diff > 0) { ++i; } else { ++j; }
+        }
+        double fracGrid = static_cast<double>(closeGrid) / static_cast<double>(grid.size());
+        // Use conservative matching: take the minimum, not the average
+        return std::min(fracDet, fracGrid);
+    };
+
+    // Precompute global interval stability from detected beats (candidate-independent)
+    double meanInt = 0.0; for (double v : intervals) meanInt += v; meanInt /= intervals.size();
+    double varInt = 0.0; for (double v : intervals) { double d = v - meanInt; varInt += d*d; }
+    varInt /= intervals.size();
+    double stdInt = std::sqrt(varInt);
+    const double stabilityFixed = clamp01(1.0 - (stdInt / std::max(1e-9, meanInt)));
+
+    struct Cand { double bpm; std::vector<double> grid; double score; double cov; double ev; };
+    std::vector<Cand> cands;
+    cands.reserve(3);
+    for (double b : {bpm05, bpm1x, bpm2x}) {
+        Cand c; c.bpm = b; c.grid = makeGrid(b);
+        c.ev = tempogramEvidence(b);
+        c.cov = coverageMatch(c.grid);
+        const double alpha = 0.55, beta = 0.35, gamma = 0.10; // emphasize tempogram and coverage
+        c.score = alpha * c.ev + beta * c.cov + gamma * stabilityFixed;
+        cands.push_back(std::move(c));
+    }
+
+    // Find best and compare vs 1x
+    int idx1x = 1; // order is {0.5x, 1x, 2x}
+    int bestIdx = idx1x;
+    for (int i = 0; i < static_cast<int>(cands.size()); ++i) {
+        if (cands[i].score > cands[bestIdx].score) bestIdx = i;
+    }
+
+    // Require strong improvement and better or comparable coverage to switch octave
+    double relGain = (cands[bestIdx].score - cands[idx1x].score) / std::max(1e-6, cands[idx1x].score);
+    bool coverageGuard = (cands[idx1x].cov >= 0.85) && (cands[bestIdx].cov < cands[idx1x].cov + 0.05);
+    bool switchOctave = (bestIdx != idx1x && relGain > 0.15 && !coverageGuard);
+    m_octaveSwitchedLast = switchOctave;
+    if (switchOctave) {
+        return cands[bestIdx].grid; // adopt corrected octave grid
+    }
+    return beatTimes; // keep original
+}
+
 // Generate final beat tracking result in expected JSON format
 nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<double>& beatTimes, double duration) {
     if (beatTimes.size() < 2) {
         return makeResultFallback(duration);
     }
     
-    // Compute BPM from median interval
+    // Compute intervals and median interval
     std::vector<double> intervals;
+    intervals.reserve(beatTimes.size() - 1);
     for (size_t i = 1; i < beatTimes.size(); ++i) {
-        intervals.push_back(beatTimes[i] - beatTimes[i-1]);
+        double d = beatTimes[i] - beatTimes[i-1];
+        if (d > 0.0) intervals.push_back(d);
     }
+    if (intervals.empty()) return makeResultFallback(duration);
     
     std::sort(intervals.begin(), intervals.end());
-    double medianInterval = intervals[intervals.size() / 2];
-    double bpm = 60.0 / medianInterval;
+    const double medianInterval = intervals[intervals.size() / 2];
+    const double bpm = 60.0 / medianInterval;
     
-    // Estimate confidence based on interval consistency
-    double intervalVariance = 0.0;
-    for (double interval : intervals) {
-        double diff = interval - medianInterval;
-        intervalVariance += diff * diff;
+    // Global interval consistency (kept as principal factor)
+    double mean = 0.0;
+    for (double v : intervals) mean += v;
+    mean /= static_cast<double>(intervals.size());
+    double var = 0.0;
+    for (double v : intervals) { double d = v - mean; var += d * d; }
+    var /= static_cast<double>(intervals.size());
+    const double intervalStdDev = std::sqrt(var);
+    const double globalConsistency = std::max(0.0, std::min(1.0, 1.0 - (intervalStdDev / medianInterval) * 2.0));
+    
+    // Coverage: how many beats we have vs. how many expected
+    const double expectedBeats = std::max(1.0, duration / medianInterval);
+    const double rawCoverage = static_cast<double>(beatTimes.size()) / expectedBeats;
+    const double coverageScore = std::max(0.0, std::min(1.0, rawCoverage));
+    
+    // Local stability: sliding 4-second window std-dev of local intervals (lower is better)
+    const double windowSec = 4.0;
+    std::vector<double> localStdNorms;
+    size_t startIdx = 0;
+    for (size_t i = 0; i < beatTimes.size(); ++i) {
+        while (startIdx < i && (beatTimes[i] - beatTimes[startIdx]) > windowSec) {
+            ++startIdx;
+        }
+        if (i > startIdx + 1) {
+            // collect intervals within [startIdx, i]
+            std::vector<double> winIntervals;
+            winIntervals.reserve(i - startIdx);
+            for (size_t k = startIdx + 1; k <= i; ++k) {
+                double d = beatTimes[k] - beatTimes[k-1];
+                if (d > 0.0) winIntervals.push_back(d);
+            }
+            if (winIntervals.size() >= 2) {
+                double m = 0.0; for (double v : winIntervals) m += v; m /= winIntervals.size();
+                double vv = 0.0; for (double v : winIntervals) { double dd = v - m; vv += dd * dd; }
+                vv /= winIntervals.size();
+                double s = std::sqrt(vv);
+                localStdNorms.push_back(s / medianInterval);
+            }
+        }
     }
-    intervalVariance /= intervals.size();
-    double intervalStdDev = std::sqrt(intervalVariance);
+    double localInstability = 0.0;
+    if (!localStdNorms.empty()) {
+        for (double x : localStdNorms) localInstability += x;
+        localInstability /= static_cast<double>(localStdNorms.size());
+    }
+    const double localStabilityScore = std::max(0.0, std::min(1.0, 1.0 - localInstability));
     
-    // Confidence: higher when intervals are more consistent
-    double confidence = std::max(0.0, std::min(1.0, 1.0 - (intervalStdDev / medianInterval) * 2.0));
+    // Composite confidence: weights w1=0.6 (global), w3=0.2 (coverage), w4=0.2 (local stability)
+    const double w1 = 0.6, w3 = 0.2, w4 = 0.2;
+    double confidence = w1 * globalConsistency + w3 * coverageScore + w4 * localStabilityScore;
+    confidence = std::max(0.0, std::min(1.0, confidence));
     
-    // Create beat grid
+    // Create beat grid JSON
     nlohmann::json beatGrid = nlohmann::json::array();
     for (double t : beatTimes) {
         if (t >= 0.0 && t <= duration) {
-            beatGrid.push_back({
-                {"t", static_cast<float>(t)}, 
-                {"strength", 1.0f}
-            });
+            beatGrid.push_back({{"t", static_cast<float>(t)}, {"strength", 1.0f}});
         }
     }
     
-    // Create downbeats (every 4th beat)
+    // Downbeats (every 4th beat)
     nlohmann::json downbeats = nlohmann::json::array();
     for (size_t i = 0; i < beatGrid.size(); i += 4) {
         downbeats.push_back(beatGrid[i]["t"]);
     }
     
-    // Return result with new method identifier
-    return {
-        {"bpm", bpm},
-        {"confidence", confidence},
-        {"beatInterval", static_cast<float>(medianInterval)},
-        {"beatGrid", beatGrid},
-        {"downbeats", downbeats},
-        {"method", "beat-tracking-dp"}  // Identify the new approach
+    nlohmann::json j = {{"bpm", bpm},
+            {"confidence", confidence},
+            {"beatInterval", static_cast<float>(medianInterval)},
+            {"beatGrid", beatGrid},
+            {"downbeats", downbeats},
+            {"method", "beat-tracking-dp"}};
+
+    // C2: Health metrics and flags
+    // Fraction of intervals near octave-related durations (0.5x or 2x of median)
+    size_t altCount = 0;
+    for (double v : intervals) {
+        double rHalf = std::abs(v - 0.5 * medianInterval) / std::max(1e-9, 0.5 * medianInterval);
+        double rDouble = std::abs(v - 2.0 * medianInterval) / std::max(1e-9, 2.0 * medianInterval);
+        if (std::min(rHalf, rDouble) < 0.08) {
+            ++altCount;
+        }
+    }
+    const double altHarmonicFraction = intervals.empty() ? 0.0 : (static_cast<double>(altCount) / intervals.size());
+
+    const bool tempoDriftSuspected = (localInstability > 0.18) || (globalConsistency < 0.65);
+    const bool octaveAmbiguityHigh = (altHarmonicFraction > 0.30);
+    const bool lowCoverage = (rawCoverage < 0.85);
+    const bool analysisTruncated = (m_fastAnalysisSec > 0.0 && duration > m_fastAnalysisSec + 0.5);
+
+    j["health"] = {
+        {"tempoDriftSuspected", tempoDriftSuspected},
+        {"octaveAmbiguityHigh", octaveAmbiguityHigh},
+        {"lowCoverage", lowCoverage},
+        {"analysisTruncated", analysisTruncated},
+        {"fixedTempoAssumption", m_fixedTempo},
+        {"octaveCorrectionApplied", m_octaveSwitchedLast}
     };
+
+    j["metrics"] = {
+        {"intervalStdRel", intervalStdDev / std::max(1e-9, medianInterval)},
+        {"coverage", rawCoverage},
+        {"localInstability", localInstability},
+        {"altHarmonicFraction", altHarmonicFraction}
+    };
+
+    return j;
 }
 
 std::unique_ptr<core::IAnalysisModule> createRealBPMModule() { return std::make_unique<RealBPMModule>(); }
