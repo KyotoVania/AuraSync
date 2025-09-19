@@ -821,7 +821,33 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
             }
         }
     }
-    const double bpm = 60.0 / periodLS;
+    // Refine global period by maximizing circular alignment around LS estimate
+    double periodRef = periodLS;
+    if (periodLS > 0.0 && beatTimes.size() >= 8) {
+        const double PI = 3.14159265358979323846;
+        const double maxRel = 0.01; // ±1%
+        const int steps = 81;       // ~0.025% per step
+        double bestR = -1.0;
+        double bestP = periodLS;
+        for (int s = 0; s < steps; ++s) {
+            double rel = -maxRel + (2.0 * maxRel) * (static_cast<double>(s) / (steps - 1));
+            double P = periodLS * (1.0 + rel);
+            if (P <= 1e-6) continue;
+            double omega = 2.0 * PI / P;
+            double sx = 0.0, sy = 0.0;
+            for (double t : beatTimes) {
+                double ang = omega * t;
+                sx += std::cos(ang);
+                sy += std::sin(ang);
+            }
+            double R = std::sqrt(sx*sx + sy*sy) / static_cast<double>(beatTimes.size());
+            if (R > bestR) { bestR = R; bestP = P; }
+        }
+        if (bestR > 0.0) {
+            periodRef = bestP;
+        }
+    }
+    double bpm = 60.0 / periodRef;
     
     // Global interval consistency (kept as principal factor)
     double mean = 0.0;
@@ -834,7 +860,7 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     const double globalConsistency = std::max(0.0, std::min(1.0, 1.0 - (intervalStdDev / medianInterval) * 2.0));
     
     // Coverage: how many beats we have vs. how many expected
-    const double expectedBeats = std::max(1.0, duration / periodLS);
+    const double expectedBeats = std::max(1.0, duration / periodRef);
     const double rawCoverage = static_cast<double>(beatTimes.size()) / expectedBeats;
     const double coverageScore = std::max(0.0, std::min(1.0, rawCoverage));
     
