@@ -10,6 +10,12 @@
 #include <iostream>
 #include <iomanip>
 #include <complex>
+#include <string>
+#include <cctype>
+// QM-DSP (Queen Mary) headers for Mixxx-identical engine
+#include <dsp/onsets/DetectionFunction.h>
+#include <dsp/tempotracking/TempoTrackV2.h>
+#include <maths/MathUtilities.h>
 
 namespace ave::modules {
 
@@ -49,6 +55,19 @@ public:
             if (Hc < 2) Hc = 2; if (Hc > 8) Hc = 8;
             m_combHarmonics = Hc;
         }
+        // Engine selection: allow exact QM-DSP path
+        if (config.contains("engine")) {
+            std::string eng = config["engine"].get<std::string>();
+            std::string elow = eng;
+            std::transform(elow.begin(), elow.end(), elow.begin(), [](unsigned char c){return (char)std::tolower(c);} );
+            if (elow == "qm" || elow == "qm-dsp" || elow == "queen-mary") {
+                m_useQMDSP = true;
+            } else if (elow == "native") {
+                m_useQMDSP = false;
+            }
+        } else if (config.contains("useQMDSP")) {
+            m_useQMDSP = config["useQMDSP"].get<bool>();
+        }
         if (m_cfg.minBPM < 30.f) m_cfg.minBPM = 30.f;
         if (m_cfg.maxBPM > 240.f) m_cfg.maxBPM = 240.f;
         if (m_cfg.minBPM > m_cfg.maxBPM) std::swap(m_cfg.minBPM, m_cfg.maxBPM);
@@ -67,6 +86,14 @@ public:
         }
 
         std::vector<float> mono = audio.getMono();
+
+        // If exact QM-DSP engine is requested, use it and bypass native pipeline
+        if (m_useQMDSP) {
+            std::vector<double> beatTimes = processWithQMDSP(mono, sr, audio.getDuration());
+            if (beatTimes.empty()) return makeResultFallback(audio.getDuration());
+            return generateBeatTrackingResult(beatTimes, audio.getDuration());
+        }
+
         size_t N = m_cfg.frameSize;
         size_t H = m_cfg.hopSize;
         if (m_qmLike) {
@@ -133,6 +160,8 @@ private:
     bool m_octaveCorrection = true;
     bool m_qmLike = false;
     bool m_fixedTempo = false;
+    // Exact Mixxx/QM-DSP engine toggle
+    bool m_useQMDSP = false;
     double m_fastAnalysisSec = 0.0;
     // R4: Hybrid tempogram (ACF + comb-like evidence)
     bool m_hybridTempogram = false;
@@ -150,6 +179,9 @@ private:
                                                        const std::vector<std::vector<double>>& tempogram, 
                                                        double frameRate, double duration);
     nlohmann::json generateBeatTrackingResult(const std::vector<double>& beatTimes, double duration);
+
+    // QM-DSP direct path (Mixxx-identical engine)
+    std::vector<double> processWithQMDSP(const std::vector<float>& mono, float sr, double duration);
     
     // Helper methods for dynamic programming
     double computeTransitionCost(const BeatCandidate& prev, const BeatCandidate& current, 
@@ -829,12 +861,27 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
         downbeats.push_back(beatGrid[i]["t"]);
     }
     
+    // Annotate method/engine based on active configuration
+    std::string method;
+    const char* engine = nullptr;
+    if (m_useQMDSP) {
+        method = "qm-dsp";
+        engine = "qm-dsp";
+    } else {
+        method = "beat-tracking-dp";
+        if (m_qmLike) method = "qm-like-dp";
+        if (m_hybridTempogram) method += "+hybrid";
+        if (m_fixedTempo) method += "+fixed";
+        engine = m_qmLike ? "qm-like" : "native";
+    }
+
     nlohmann::json j = {{"bpm", bpm},
             {"confidence", confidence},
             {"beatInterval", static_cast<float>(medianInterval)},
             {"beatGrid", beatGrid},
             {"downbeats", downbeats},
-            {"method", "beat-tracking-dp"}};
+            {"method", method},
+            {"engine", engine}};
 
     // C2: Health metrics and flags
     // Fraction of intervals near octave-related durations (0.5x or 2x of median)
@@ -875,3 +922,80 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
 std::unique_ptr<core::IAnalysisModule> createRealBPMModule() { return std::make_unique<RealBPMModule>(); }
 
 } // namespace ave::modules
+
+// QM-DSP direct engine processing using DetectionFunction + TempoTrackV2
+std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vector<float>& mono, float sr, double duration) {
+    // Parameters aligned with Mixxx AnalyzerQueenMaryBeats
+    constexpr float kStepSecs = 0.01161f;
+    const int stepSize = std::max(1, static_cast<int>(std::lround(sr * kStepSecs)));
+    int windowSize = MathUtilities::nextPowerOfTwo(static_cast<int>(std::lround(sr / 50.0f)));
+    if (windowSize < 256) windowSize = 256;
+    if (stepSize > windowSize) {
+        // keep hop <= frame length; fallback to quarter-frame
+        windowSize = std::max(windowSize, 256);
+    }
+
+    DFConfig cfg{};
+    cfg.DFType = DF_COMPLEXSD;
+    cfg.stepSize = stepSize;
+    cfg.frameLength = windowSize;
+    cfg.dbRise = 3;
+    cfg.adaptiveWhitening = false;
+    cfg.whiteningRelaxCoeff = -1;
+    cfg.whiteningFloor = -1;
+
+    DetectionFunction det(cfg);
+
+    if (mono.size() < static_cast<size_t>(windowSize)) return {};
+
+    std::vector<double> detectionResults;
+    detectionResults.reserve(1 + (mono.size() - static_cast<size_t>(windowSize)) / static_cast<size_t>(stepSize));
+    std::vector<double> frame(windowSize, 0.0);
+
+    const size_t total = mono.size();
+    for (size_t start = 0; start + static_cast<size_t>(windowSize) <= total; start += static_cast<size_t>(stepSize)) {
+        // copy mono to double buffer (no windowing: qm-dsp does its own)
+        for (int i = 0; i < windowSize; ++i) frame[i] = static_cast<double>(mono[start + i]);
+        double val = det.processTimeDomain(frame.data());
+        detectionResults.push_back(val);
+    }
+
+    int nonZeroCount = static_cast<int>(detectionResults.size());
+    while (nonZeroCount > 0 && detectionResults[nonZeroCount - 1] <= 0.0) {
+        --nonZeroCount;
+    }
+    if (nonZeroCount <= 2) return {};
+
+    std::vector<double> df;
+    std::vector<double> beatPeriod;
+    df.reserve(nonZeroCount - 2);
+    beatPeriod.reserve(nonZeroCount - 2);
+
+    for (int i = 2; i < nonZeroCount; ++i) {
+        df.push_back(detectionResults[i]);
+        beatPeriod.push_back(0.0);
+    }
+
+    TempoTrackV2 tt(sr, stepSize);
+    tt.calculateBeatPeriod(df, beatPeriod);
+
+    std::vector<double> beats;
+    tt.calculateBeats(df, beatPeriod, beats);
+
+    std::vector<double> beatTimes;
+    beatTimes.reserve(beats.size());
+    for (size_t i = 0; i < beats.size(); ++i) {
+        // Convert beat index to sample position and then to seconds (match Mixxx + half-hop offset)
+        double samplePos = (beats[i] * stepSize) + (stepSize / 2.0);
+        double t = samplePos / static_cast<double>(sr);
+        if (t >= 0.0 && t <= duration + 1e-6) {
+            beatTimes.push_back(t);
+        }
+    }
+
+    // Ensure sorted & deduplicated
+    std::sort(beatTimes.begin(), beatTimes.end());
+    beatTimes.erase(std::unique(beatTimes.begin(), beatTimes.end(), [](double a, double b){ return std::abs(a-b) < 1e-6; }), beatTimes.end());
+
+    return beatTimes;
+}

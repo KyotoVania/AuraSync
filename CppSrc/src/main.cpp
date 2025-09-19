@@ -80,7 +80,8 @@ int main(int argc, char* argv[]) {
             {"hopSize", 512},
             {"acfWindowSec", 8.0},
             {"historySize", 10},
-            {"octaveCorrection", true}
+            {"octaveCorrection", true},
+            {"engine", "qm"}
         });
 
         pipeline->setModuleConfig("Onset", {

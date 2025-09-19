@@ -1,116 +1,111 @@
-﻿# Audit Comparatif: RealBPMModule v2.0.0-beattracking vs Mixxx (QM-DSP / SoundTouch)
+﻿# Directive Stratégique – Audit d'Intégration et Analyse Comparative Face à Mixxx/QM-DSP
 
-Auteur: Agent Junnie (Audio Visual Engine)
-Date: 2025-09-18
+Auteur: Agent Junie (Audio Visual Engine)
+Date: 2025-09-19
 
-Objectif: Ingénierie inverse et comparaison du pipeline BPM/Beat Tracking de Mixxx avec notre RealBPMModule v2.0.0, pour identifier des principes de robustesse et des techniques à intégrer.
-
----
-
-1) Cartographie des Pipelines
-
-A. Notre pipeline (RealBPMModule v2.0.0)
-- ODF: Complex Spectral Difference (mono-bande) + lissage léger
-  • Référence code: src/modules/RealBPMModule.cpp → extractComplexSpectralDifferenceODF(...)
-- Détection des candidats: pics locaux avec seuil adaptatif (mean + 1.0·std) + NMS temporelle (fenêtre min correspondant à 300 BPM)
-  • Référence code: detectBeatCandidates(...)
-- Estimation du tempo: Tempogramme par autocorrélation locale (log-spaced 120 bins) + renfort harmoniques (×0.5, ×2)
-  • Référence code: computeTempogram(...)
-- Tracking: Programmation dynamique (Viterbi-like) sur candidats, coût de transition = support tempogramme + bonus harmonique + préférence musicale (réduite) − pénalité de changement de tempo
-  • Référence code: trackBeatsWithDynamicProgramming(...), computeTransitionCost(...)
-- Sortie/Confiance: BPM par médiane d’intervalles; confiance = 1 − 2·(écart-type/intervalle médian)
-  • Référence code: generateBeatTrackingResult(...)
-
-B. Pipeline Mixxx (QM-DSP par défaut, SoundTouch en alternative)
-- Orchestrateur: AnalyzerBeats sélectionne un plugin (par défaut Queen Mary), gère préférences (tempo fixe, ré-analyse, fast analysis)
-  • mixxx/src/analyzer/analyzerbeats.{h,cpp}
-- ODF: DF_COMPLEXSD (Complex Spectral Difference) via QM-DSP DetectionFunction
-  • mixxx/src/analyzer/plugins/analyzerqueenmarybeats.cpp: makeDetectionFunctionConfig → DFType = DF_COMPLEXSD, dbRise=3
-- Paramètres temporels: step ≈ 11.61 ms (kStepSecs), window = nextPowerOfTwo(fs / 50 Hz) → ~1024 @ 44.1 kHz
-  • idem
-- Estimation tempo/beat: TempoTrackV2 (QM-DSP) calcule beatPeriod puis les frappes (calculateBeats)
-  • mixxx/src/analyzer/plugins/analyzerqueenmarybeats.cpp (TempoTrackV2)
-- Beat grid: liste de positions d’impulsions (FramePos) post-traitées; pas de programmation dynamique explicite côté Mixxx (délégué à QM-DSP)
-- Confiance: aucune métrique de confiance explicite exposée par AnalyzerQueenMaryBeats/AnalyzerBeats; stockage via Beats/BeatFactory avec versioning, pas de score de fiabilité direct
-  • Recherche «confidence» dans mixxx: aucune occurrence pertinente dans l’analyse BPM/beat
-- Alternative: AnalyzerSoundTouchBeats (soundtouch::BPMDetect) renvoie un BPM global (sans grille détaillée)
-  • mixxx/src/analyzer/plugins/analyzersoundtouchbeats.cpp
-
-Conclusion carto:
-- Similarités fortes sur l’ODF (Complex SD) et la logique d’analyse temporelle locale
-- Mixxx délègue l’estimation de tempo/grille au module robuste TempoTrackV2 (QM-DSP) plutôt qu’à une DP custom
-- Mixxx met l’accent sur l’ingénierie produit (plugins, préférences, fast analysis, ré-analyse conditionnelle, versioning)
+Objet: Analyse comparative exhaustive entre notre RealBPMModule v2.0.0-beattracking et l'implémentation Mixxx basée sur QM-DSP, en vue de décider d'une intégration totale, hybride, ou d'une amélioration native.
 
 ---
 
-2) Analyse Comparative par Composant
-
-2.1 Détection des Attaques (ODF)
-- Mixxx: Complex Spectral Difference via QM-DSP avec paramètres éprouvés (dbRise=3, pas d’adaptive whitening)
-- Nous: Complex SD maison monobande, fenêtre Hann, lissage léger
-- Écart clé: Mixxx utilise step/window calibrés (~11.6 ms, ~1024) et un ODF standardisé QM-DSP; nous pourrions harmoniser nos paramètres de fenêtre/pas ou exposer un mode «QM-like».
-
-2.2 Estimation de Tempo
-- Mixxx: TempoTrackV2 (algorithme robuste incluant suivi de tempo et harmonics handling intégré) sur la série ODF; pas d’autocorrélation explicite côté Mixxx code (caché dans QM-DSP)
-- Nous: Tempogramme par autocorrélation locale + bonus harmoniques simples
-- Écart clé: La logique d’évidence de tempo de QM-DSP paraît plus intégrée (combinaison de méthodes + heuristiques). Nos renforts harmoniques sont plus simples.
-
-2.3 Génération de Grille
-- Mixxx (QM): calcul direct des battements (calculateBeats) après beatPeriod; pas de DP explicite
-- Nous: DP sur une liste de candidats avec coûts modulaires (support tempogramme, préférences, pénalités)
-- Avantage actuel: Notre DP est explicable et modulable (greffons de coûts). Avantage Mixxx: robustesse éprouvée et paramètres calibrés (step/window/tempo tracker).
-
-2.4 Calcul de la Confiance
-- Mixxx: pas de métrique de confiance exposée par AnalyzerBeats; la fiabilité est implicite (grille stable) et encadrée par politiques produit (réanalyse, verrouillage BPM, versioning)
-- Nous: confiance basée sur la cohérence des intervalles (écart-type relatif)
-- Opportunité: enrichir notre score de confiance avec des signaux «santé» inspirés par Mixxx (stabilité locale du tempo, couverture de grille, persistance du pic tempo, consensus mono/stéréo, etc.)
+1) Introduction – Redémarrage stratégique axé performance
+Nous privilégions désormais une approche pragmatique orientée résultats. Objectif immédiat: atteindre la précision et la robustesse de Mixxx. Cet audit compare point par point notre pipeline et celui de Mixxx (QM-DSP) et conclut par une recommandation opérationnelle.
 
 ---
 
-3) Divergences Conceptuelles Clés (explicatives de robustesse)
-- Paramétrage temporel calibré (Mixxx): step ~11.6 ms, window ~20 ms @ 44.1 kHz, cohérent avec QM-DSP et pratique DJ (≈ 86 Hz)
-- Piste principale unique et éprouvée: délégation à TempoTrackV2 (intégrant la gestion d’octaves et transitions de tempo)
-- Architecture plugin + politiques de réanalyse: évite les faux positifs persistants, assure la fraîcheur des résultats en fonction des préférences et versions
-- Absence d’un score de «confiance» isolé: la robustesse vient de la stabilité du tracker et du contrôle de flux (reanalyze/lock) plutôt que d’un score ex post
+2) Méthodologie et sources
+- Notre code: src/modules/RealBPMModule.cpp (extractComplexSpectralDifferenceODF, detectBeatCandidates, computeTempogram, trackBeatsWithDynamicProgramming, postProcessOctaveCorrection, generateBeatTrackingResult)
+- Mixxx: mixxx/src/analyzer/plugins/analyzerqueenmarybeats.{h,cpp}; mixxx/src/analyzer/analyzerbeats.cpp
+  • Paramètres clés observés: DF_COMPLEXSD, dbRise=3, step kStepSecs=0.01161 s, window = nextPowerOfTwo(fs / 50 Hz)
+  • Tracking: TempoTrackV2 (qm-dsp/dsp/tempotracking/TempoTrackV2.h)
+- Littérature QM-DSP (synthèse): combinaisons autocorrélation + filtres en peigne + heuristiques de suivi du tempo (Davies & Plumbley; Dixon; Ellis; Brossier)
 
 ---
 
-4) Techniques/Concepts Mixxx prometteurs à greffer (3–5)
+3) Analyse exhaustive par étape du pipeline
 
-T1. Paramètres Step/Window «QM-like» pour l’ODF
-- Détails: step ≈ 0.01161 s; window = nextPow2(fs / 50 Hz)
-- Attendu: meilleure stabilité des pics ODF, résolution temporelle régulière; confiance accrue par intervalles plus cohérents
-- Réf: analyzerqueenmarybeats.cpp (kStepSecs, kMaximumBinSizeHz)
+Étape 1 – Fonction de Détection d'Attaques (ODF)
+- Confirmation ODF: Mixxx/QM-DSP et notre module utilisent tous deux la Complex Spectral Difference (CSD / DF_COMPLEXSD). Dans Mixxx: makeDetectionFunctionConfig → DFType=DF_COMPLEXSD, dbRise=3, whitening désactivé. Côté AVE: CSD mono-bande avec fenêtre Hann et lissage léger.
+- Fenêtrage et pas temporel: Mixxx fixe un pas temporel constant kStepSecs≈11.61 ms et choisit une fenêtre window = nextPow2(fs/50 Hz):
+  • fs=44.1 kHz → step≈512 échantillons; window≈1024 (fs/50=882 → pow2=1024)
+  • fs=48 kHz → step≈557; window≈1024 (960→1024)
+  • fs=96 kHz → step≈1115; window≈2048 (1920→2048)
+- Pourquoi une résolution temporelle constante est préférable à un pas en échantillons fixe:
+  • Invariance au taux d'échantillonnage: une granularité fixe en temps maintient une résolution (≈86 Hz) identique entre 44.1/48/96 kHz. Un pas fixe en samples induit une résolution dépendante du fs et des biais de tempo.
+  • Stabilité de phase/peigne: les filtres en peigne et l'autocorrélation opèrent mieux quand le pas temporel est constant; cela réduit le jitter des pics ODF et améliore l'alignement du beat period.
+  • Cohérence des métriques: lissage, seuils adaptatifs et tempogrammes se calibrent en secondes, pas en samples; cela facilite la généralisation cross-device.
+- Impact attendu sur la robustesse: + cohérence des pics ODF, + qualité d'estimation du beat period, – sensibilité au bruit de sr. C'est un facteur clé de la robustesse de Mixxx.
 
-T2. Post-traitement «Octave Sanity Check» sur le BPM final
-- Détails: réévaluer 0.5×/1×/2× du BPM final en regardant l’évidence tempogramme/ODF et la consistance de grille
-- Attendu: réduction des rares erreurs 70↔140, 80↔160; robustesse
-- Réf: logique implicite de TempoTrackV2 + pratiques de l’industrie
+Étape 2 – Détection des pulsations candidates
+- «Boîte noire» QM-DSP: TempoTrackV2 consomme la série ODF continue (sans binarisation forte). L'algorithme déduit implicitement les candidats via l'évidence périodique et le suivi, plutôt qu'un seuillage agressif. Par comparaison, notre seuil mean + 1·std + NMS est plus «tranchant» (risque de rater des battements faibles).
+- Évaluation d'agressivité: Mixxx/QM-DSP est moins agressif en amont (préserve l'information), plus sélectif en aval via le suivi; notre approche est plus agressive au pré-traitement (seuillage + NMS), puis flexible via DP.
+- Notre avantage à conserver: la non-maximum suppression explicite + test de maximum local produisent un ensemble de candidats propre, contrôlable et traçable. Dans une architecture hybride, nous pouvons laisser QM-DSP fournir un beat period/beat phase robuste tout en conservant NMS/local-max en sur-couche pour la régularisation et l'explicabilité.
 
-T3. Mode «Fixed Tempo Assumption» et «Fast Analysis» inspirés Mixxx
-- Détails: exposer un paramètre «tempo fixe» (durée courte) et un mode d’analyse rapide (N premières secondes)
-- Attendu: robustesse perçue (moins de faux changements), rapidité; configurable sans impacter exactitude par défaut
-- Réf: AnalyzerBeats::initialize (m_bPreferencesFixedTempo, m_bPreferencesFastAnalysis)
+Étape 3 – Estimation du tempo et périodicité
+- Coeur de la divergence: TempoTrackV2. Selon la littérature et l'implémentation observée, il combine: (a) autocorrélation/FFT pour la périodicité, (b) filtres en peigne multi-harmoniques pondérés, (c) heuristiques de continuité et de phase, (d) suivi du beat period avec contraintes (ex. inertie, bornes BPM), puis (e) génération de frappes (calculateBeats).
+- Supériorité structurelle vs notre tempogramme ACF seul:
+  • Fusion d'évidences: comb + ACF réduit les confusions 0.5×/2×/3× mieux que des pondérations manuelles.
+  • Suivi temporel intégré: le beat period est suivi au fil du temps (pas seulement choisi globalement), ce qui gère les transitions de tempo et stabilise la phase.
+  • Moins de réglages fragiles: les heuristiques intégrées encapsulent des décennies de calibrations (dbRise, hop constant, bornes BPM), difficiles à recréer vite.
+- Gestion des harmoniques (octaves): Nos pondérations manuelles (0.5×/2×) restent naïves; TempoTrackV2 opère une gestion intégrée des harmoniques via le peigne et les heuristiques de continuité, moins sujette aux sauts 70↔140/80↔160.
 
-T4. Métrique de Confiance multi-facteurs (stabilité/coverage/persistance)
-- Détails: combiner notre std/median avec: persistance du pic tempo, ratio coverage (grille vs durée), variance locale du BPM, consensus canaux
-- Attendu: score de confiance plus représentatif et utile pour l’UX
-- Réf: nos generateBeatTrackingResult + indices issus de Mixxx (absence de score → place pour mieux)
-
-T5. Filtres harmoniques étagés à la QM (comb-like sur ODF) en plus de l’ACF
-- Détails: comb filters multi-harmoniques (1×, 2×, 3×, 4×) pondérés 1/h^2
-- Attendu: salience de tempo plus nette sur textures denses
-- Réf: Notre v4 hybride (BPMModuleAlt.cpp) et littérature; cohérent avec l’esprit de TempoTrackV2
-
----
-
-5) Réponses aux Questions Ciblées
-- ODF: Mixxx utilise Complex Spectral Difference (comme nous), via QM-DSP; pas multi-bandes par défaut
-- Estimation de tempo: pilotée par TempoTrackV2 (combinaison interne de méthodes), gère l’ambiguïté d’octave au cœur de l’algorithme
-- Grille de pulsations: pas de DP explicite; calcul direct des beats à partir de beatPeriod suivi
-- Confiance: pas de métrique explicite; robustesse par design + politiques produit
+Étape 4 – Suivi de pulsation et post-traitement
+- Mixxx/QM-DSP: calculateBeats fournit directement la grille (pas de DP exposée côté Mixxx). Transparence limitée sur la fonction de coût, mais robustesse éprouvée.
+- Notre architecture modulaire: DP (coûts explicites: support tempogramme, bonus harmoniques, pénalités de variation), correction d'octave a posteriori, métriques de santé (cohérence d'intervalles, couverture). Avantage: explicabilité, configurabilité, et facilité d'AB testing. C'est notre atout principal à préserver.
 
 ---
 
-6) Synthèse
-Mixxx et notre v2 partagent une base ODF similaire. Mixxx gagne en robustesse grâce à des choix paramétriques et à l’usage d’un tracker de tempo intégré (TempoTrackV2) avec des pratiques d’ingénierie (plugins, reanalyse, fast mode). Les pistes T1–T5 ci-dessus constituent des «greffons» raisonnables et peu risqués pour améliorer la robustesse et la confiance de notre module sans compromettre l’exactitude atteinte (100% sur notre corpus actuel).
+4) Tableaux comparatifs (validés)
+
+A. Par étape du pipeline
+| Étape | Mixxx / QM-DSP | AVE RealBPMModule |
+| - | - | - |
+| ODF | Complex SD (DF_COMPLEXSD), dbRise=3, hop=0.01161 s, window=nextPow2(fs/50), whitening=off | Complex SD mono-bande, Hann, hop configurable (actuel en samples), lissage léger |
+| Candidats | Pas de seuillage dur; evidence périodique + suivi | Pics locaux + seuil mean+1σ + NMS temporelle |
+| Tempo | TempoTrackV2: ACF+peignes+heuristiques; suivi du beat period | Tempogramme ACF, pondérations 0.5×/2× |
+| Grille | calculateBeats (QM) → positions | DP avec coûts explicites |
+| Confiance | Non exposée | Écart-type relatif + métriques santé |
+
+B. Paramètres temporels
+| Paramètre | Mixxx | AVE actuel | Impact |
+| - | - | - | - |
+| Pas (hop) | 0.01161 s (≈86 Hz) | en samples (varie en s selon fs) | + robustesse cross-fs côté Mixxx |
+| Fenêtre | nextPow2(fs/50) | fixe ou liée à N interne | + salience CSD et stabilité des bins côté Mixxx |
+
+---
+
+5) Synthèse des facteurs de performance clés (Top 3)
+1) Pas temporel constant + fenêtre liée à fs (nextPow2(fs/50)) qui stabilisent l'ODF et la périodicité.
+2) TempoTrackV2: fusion ACF+peignes + suivi de tempo/phase → meilleure désambiguïsation d'octave et transitions.
+3) Paramétrage éprouvé et flux produit (plugins, fast analysis, réanalyse conditionnelle) → moins d'états incohérents.
+
+---
+
+6) Recommandation stratégique
+Option B – Intégration Hybride (Recommandée)
+- Principe: utiliser QM-DSP pour l'ODF et le tracking (TempoTrackV2) afin d'obtenir la robustesse/rapidité; conserver notre «couche supérieure» (DP optionnelle pour régulariser, correction d'octave avancée, métriques de santé, configurabilité produit).
+- Pourquoi pas A (intégration totale)? Nous perdrions notre transparence/coût explicite et nos métriques santé, différenciateurs utiles pour diagnostics et UX.
+- Pourquoi pas C (amélioration native seule)? Faisable mais plus long/risqué pour atteindre la parité; TempoTrackV2 encapsule des heuristiques non triviales.
+
+Plan d'exécution (court terme 1–2 sprints):
+- Intégrer QM-DSP côté ODF+Tempo (comme Mixxx): hop=0.01161 s; window=nextPow2(fs/50); DF_COMPLEXSD (dbRise=3).
+- Conserver/brancher notre DP en option «regularize grid» au-dessus des beats QM (si nécessaire pour cas limites), sans bloquer le chemin QM pur.
+- Maintenir nos métriques santé et l'octave sanity-check en post-process sur la grille QM.
+- Exposer des modes «fast analysis» et «tempo fixe» inspirés Mixxx.
+
+Risques & mitigations:
+- Divergences de dépendances/ABI: utiliser la même version de QM-DSP que Mixxx; valider sous nos OS cibles.
+- Lissage des frontières d'analyse: aligner notre frameRate interne avec kStepSecs.
+
+---
+
+7) Réponses ciblées (validation du rapport initial)
+- ODF: Oui, Complex Spectral Difference des deux côtés. Paramètres QM confirmés: dbRise=3; whitening off.
+- Candidats: QM-DSP est moins agressif en pré-traitement; notre NMS/local-max est un atout à conserver en sur-couche.
+- Tempo/périodicité: TempoTrackV2 est structurellement supérieur à un tempogramme ACF seul (comb + heuristiques + suivi continu).
+- Harmoniques: Notre pondération 0.5×/2× est naïve vs gestion intégrée du peigne TempoTrackV2.
+- Suivi/post-traitement: Notre architecture DP/correction/métriques est plus transparente et reste un différenciateur clé.
+
+---
+
+8) Conclusion
+Pour converger rapidement vers un niveau industriel, adoptons une intégration hybride: QM-DSP pour l'ODF et le tracking (robustesse/rapidité), tout en capitalisant sur notre couche supérieure (explicabilité, métriques, configurabilité). Cette stratégie minimise le risque, maximise le gain de performance, et préserve notre avantage produit.

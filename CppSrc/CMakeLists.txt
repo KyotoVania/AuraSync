@@ -47,12 +47,46 @@ target_include_directories(ave_core
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${FFTW3_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp
+        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp/include
 )
 
+# --- QM-DSP minimal static library (Mixxx-compatible) ---
+add_library(ave_qmdsp STATIC
+        mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
+        mixxx/lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp
+        mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
+        mixxx/lib/qm-dsp/dsp/transforms/FFT.cpp
+        mixxx/lib/qm-dsp/ext/kissfft/kiss_fft.c
+        mixxx/lib/qm-dsp/ext/kissfft/tools/kiss_fftr.c
+        mixxx/lib/qm-dsp/maths/MathUtilities.cpp
+        mixxx/lib/qm-dsp/maths/Correlation.cpp
+        mixxx/lib/qm-dsp/dsp/signalconditioning/DFProcess.cpp
+        mixxx/lib/qm-dsp/dsp/signalconditioning/Filter.cpp
+        mixxx/lib/qm-dsp/dsp/signalconditioning/FiltFilt.cpp
+        mixxx/lib/qm-dsp/dsp/signalconditioning/Framer.cpp
+)
+
+# The qm-dsp sources use relative includes like <dsp/...> so we point include dirs to the qm-dsp root
+# and to its include directory if present.
+target_include_directories(ave_qmdsp PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp
+        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp/include
+)
+
+# Silence warnings for external code if needed
+if (MSVC)
+    target_compile_definitions(ave_qmdsp PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+# Use double precision in kissfft to match qm-dsp's FFT wrapper
+target_compile_definitions(ave_qmdsp PUBLIC KISS_FFT_USE_DOUBLE kiss_fft_scalar=double)
+
+# Link qm-dsp into core library
 target_link_libraries(ave_core
         PUBLIC
         nlohmann_json::nlohmann_json
         ${FFTW3_DIR}/libfftw3-3.lib
+        ave_qmdsp
 )
 
 # --- Main Executable ---
