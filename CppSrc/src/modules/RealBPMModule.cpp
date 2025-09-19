@@ -793,7 +793,35 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     
     std::sort(intervals.begin(), intervals.end());
     const double medianInterval = intervals[intervals.size() / 2];
-    const double bpm = 60.0 / medianInterval;
+    
+    // Refine BPM using least-squares fit of beat index vs time (global period)
+    double periodLS = medianInterval;
+    {
+        const size_t M = beatTimes.size();
+        if (M >= 3) {
+            // Use middle 80% of beats to reduce boundary effects
+            size_t i0 = static_cast<size_t>(M * 0.1);
+            size_t i1 = static_cast<size_t>(M * 0.9);
+            if (i1 <= i0 + 1) { i0 = 0; i1 = M; }
+            const size_t K = i1 - i0;
+            if (K >= 2) {
+                double sumK = 0.0, sumT = 0.0, sumKK = 0.0, sumKT = 0.0;
+                for (size_t k = 0; k < K; ++k) {
+                    double ki = static_cast<double>(i0 + k);
+                    double ti = beatTimes[i0 + k];
+                    sumK += ki; sumT += ti; sumKK += ki * ki; sumKT += ki * ti;
+                }
+                double denom = (K * sumKK - sumK * sumK);
+                if (std::abs(denom) > 1e-12) {
+                    double slope = (K * sumKT - sumK * sumT) / denom; // seconds per beat index
+                    if (slope > 1e-6 && std::isfinite(slope)) {
+                        periodLS = slope;
+                    }
+                }
+            }
+        }
+    }
+    const double bpm = 60.0 / periodLS;
     
     // Global interval consistency (kept as principal factor)
     double mean = 0.0;
@@ -806,7 +834,7 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     const double globalConsistency = std::max(0.0, std::min(1.0, 1.0 - (intervalStdDev / medianInterval) * 2.0));
     
     // Coverage: how many beats we have vs. how many expected
-    const double expectedBeats = std::max(1.0, duration / medianInterval);
+    const double expectedBeats = std::max(1.0, duration / periodLS);
     const double rawCoverage = static_cast<double>(beatTimes.size()) / expectedBeats;
     const double coverageScore = std::max(0.0, std::min(1.0, rawCoverage));
     
@@ -927,13 +955,12 @@ std::unique_ptr<core::IAnalysisModule> createRealBPMModule() { return std::make_
 std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vector<float>& mono, float sr, double duration) {
     // Parameters aligned with Mixxx AnalyzerQueenMaryBeats
     constexpr float kStepSecs = 0.01161f;
-    const int stepSize = std::max(1, static_cast<int>(std::lround(sr * kStepSecs)));
-    int windowSize = MathUtilities::nextPowerOfTwo(static_cast<int>(std::lround(sr / 50.0f)));
+
+    // Use Mixxx-identical integer math for step and window sizes
+    const int sampleRate = static_cast<int>(std::lround(sr));
+    const int stepSize = std::max(1, static_cast<int>(sampleRate * kStepSecs)); // truncation like Mixxx
+    int windowSize = MathUtilities::nextPowerOfTwo(sampleRate / 50); // integer division like Mixxx
     if (windowSize < 256) windowSize = 256;
-    if (stepSize > windowSize) {
-        // keep hop <= frame length; fallback to quarter-frame
-        windowSize = std::max(windowSize, 256);
-    }
 
     DFConfig cfg{};
     cfg.DFType = DF_COMPLEXSD;
@@ -976,7 +1003,7 @@ std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vec
         beatPeriod.push_back(0.0);
     }
 
-    TempoTrackV2 tt(sr, stepSize);
+    TempoTrackV2 tt(static_cast<float>(sampleRate), stepSize);
     tt.calculateBeatPeriod(df, beatPeriod);
 
     std::vector<double> beats;
@@ -987,7 +1014,7 @@ std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vec
     for (size_t i = 0; i < beats.size(); ++i) {
         // Convert beat index to sample position and then to seconds (match Mixxx + half-hop offset)
         double samplePos = (beats[i] * stepSize) + (stepSize / 2.0);
-        double t = samplePos / static_cast<double>(sr);
+        double t = samplePos / static_cast<double>(sampleRate);
         if (t >= 0.0 && t <= duration + 1e-6) {
             beatTimes.push_back(t);
         }
