@@ -15,6 +15,7 @@ namespace ave::modules {
 class RealCueModule : public core::IAnalysisModule {
 private:
     double m_anticipationTime = 1.5; // seconds for pre-drop cues
+    double m_formalSimilarityThreshold = 0.85; // threshold for segment clustering
     
 public:
     std::string getName() const override { return "Cue"; }
@@ -27,6 +28,9 @@ public:
     bool initialize(const nlohmann::json& config) override {
         if (config.contains("anticipationTime")) {
             m_anticipationTime = config["anticipationTime"];
+        }
+        if (config.contains("formalSimilarityThreshold")) {
+            m_formalSimilarityThreshold = std::clamp(config["formalSimilarityThreshold"].get<double>(), 0.0, 1.0);
         }
         return true;
     }
@@ -470,6 +474,64 @@ private:
             int count = 1;
             for (size_t id : chorusIdx) {
                 labeledSegments[id]["label"] = std::string("chorus_") + std::to_string(count++);
+            }
+        }
+
+        // Relational analysis: compute similarity matrix over normalized feature vectors and cluster to assign formal labels (A,B,C,...)
+        const size_t S = feats.size();
+        if (S > 0) {
+            // Build normalized feature vectors per segment
+            auto buildNormVec = [&](size_t i) {
+                std::vector<double> v;
+                v.reserve(9);
+                v.push_back(rLow.norm(feats[i].lowEnergy));
+                v.push_back(rMid.norm(feats[i].midEnergy));
+                v.push_back(rHigh.norm(feats[i].highEnergy));
+                v.push_back(rOnset.norm(feats[i].onsetDensity));
+                v.push_back(rCentroid.norm(feats[i].spectralCentroidMean));
+                v.push_back(std::clamp(feats[i].timbralStability, 0.0, 1.0));
+                v.push_back(std::clamp(feats[i].rhythmStability, 0.0, 1.0));
+                v.push_back(rOverall.norm(feats[i].overallEnergy));
+                v.push_back(rDur.norm(feats[i].duration));
+                return v;
+            };
+            auto dist01 = [&](const std::vector<double>& a, const std::vector<double>& b){
+                size_t D = std::min(a.size(), b.size()); if (D == 0) return 1.0; double s = 0.0; for (size_t k = 0; k < D; ++k) { double d = a[k] - b[k]; s += d*d; }
+                double d = std::sqrt(s) / std::sqrt(static_cast<double>(D)); if (d < 0.0) d = 0.0; if (d > 1.0) d = 1.0; return d; };
+            std::vector<std::vector<double>> sim(S, std::vector<double>(S, 0.0));
+            std::vector<std::vector<double>> vecs; vecs.reserve(S);
+            for (size_t i = 0; i < S; ++i) vecs.push_back(buildNormVec(i));
+            for (size_t i = 0; i < S; ++i) {
+                sim[i][i] = 1.0;
+                for (size_t j = i+1; j < S; ++j) {
+                    double d = dist01(vecs[i], vecs[j]);
+                    double s = 1.0 - d;
+                    sim[i][j] = s; sim[j][i] = s;
+                }
+            }
+            // Threshold clustering
+            std::vector<int> clusterId(S, -1);
+            int clusters = 0;
+            for (size_t i = 0; i < S; ++i) {
+                if (clusterId[i] != -1) continue;
+                int cid = clusters++;
+                clusterId[i] = cid;
+                for (size_t j = i + 1; j < S; ++j) {
+                    if (clusterId[j] == -1 && sim[i][j] >= m_formalSimilarityThreshold) {
+                        clusterId[j] = cid;
+                    }
+                }
+            }
+            // Assign formal labels 'A','B','C', ... wrap to 'Z' then 'A2', etc.
+            for (size_t i = 0; i < S; ++i) {
+                int cid = clusterId[i];
+                std::string formal;
+                if (cid < 26) {
+                    formal.push_back(static_cast<char>('A' + cid));
+                } else {
+                    formal = std::string("A") + std::to_string(cid + 1); // rare
+                }
+                labeledSegments[i]["formalLabel"] = formal;
             }
         }
 

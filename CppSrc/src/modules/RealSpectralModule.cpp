@@ -35,6 +35,11 @@ public:
                 {"high", {4000.0, 22050.0}}
             };
         }
+        // Spectral contrast params (tunable)
+        if (config.contains("contrastNumBands")) m_contrastNumBands = std::max<int>(1, config["contrastNumBands"].get<int>());
+        if (config.contains("contrastMinFreq")) m_contrastMinFreq = std::max(1.0, config["contrastMinFreq"].get<double>());
+        if (config.contains("contrastTopPercent")) m_contrastTopPercent = std::clamp(config["contrastTopPercent"].get<double>(), 0.01, 0.9);
+        if (config.contains("contrastBottomPercent")) m_contrastBottomPercent = std::clamp(config["contrastBottomPercent"].get<double>(), 0.01, 0.9);
         return true;
     }
 
@@ -115,6 +120,34 @@ public:
             }
         }
 
+        // Prepare octave-like bands for Spectral Contrast (log-spaced, doubling bandwidth)
+        std::vector<std::pair<double,double>> contrastBandEdges;
+        {
+            double flo = std::max(1.0, m_contrastMinFreq);
+            for (int i = 0; i < m_contrastNumBands && flo < nyquist; ++i) {
+                double fhi = std::min(nyquist, flo * 2.0);
+                if (fhi <= flo) break;
+                contrastBandEdges.emplace_back(flo, fhi);
+                flo = fhi;
+            }
+            if (contrastBandEdges.empty()) {
+                contrastBandEdges.emplace_back(60.0, nyquist);
+            }
+        }
+        // Map FFT bins to contrast bands
+        std::vector<std::vector<size_t>> contrastBandBins(contrastBandEdges.size());
+        for (size_t k = 0; k < numBins; ++k) {
+            double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
+            for (size_t b = 0; b < contrastBandEdges.size(); ++b) {
+                const auto& be = contrastBandEdges[b];
+                bool inLast = (b + 1 == contrastBandEdges.size());
+                if ((fk >= be.first && fk < be.second) || (inLast && fk <= be.second)) {
+                    contrastBandBins[b].push_back(k);
+                    break;
+                }
+            }
+        }
+
         // Prepare MFCC computation (Mel filterbank + DCT-II)
         const int numMelBands = 40;
         const int numCoeffs = 13;
@@ -169,6 +202,8 @@ public:
         nlohmann::json bands = nlohmann::json::object();
         for (const auto& name : bandNames) bands[name] = nlohmann::json::array();
         nlohmann::json mfcc = nlohmann::json::array();
+        // Spectral contrast output: array of {t, v:[...]} with octave-band contrasts
+        nlohmann::json spectralContrast = nlohmann::json::array();
 
         // STFT loop
         for (size_t f = 0; f < numFrames; ++f) {
@@ -215,6 +250,26 @@ public:
                 mfccVec[static_cast<size_t>(c)] = acc;
             }
 
+            // Spectral Contrast per octave band: difference (dB) between top and bottom energy quantiles within band
+            std::vector<double> contrastVec(contrastBandBins.size(), 0.0);
+            const double eps = 1e-12;
+            for (size_t b = 0; b < contrastBandBins.size(); ++b) {
+                const auto& bins = contrastBandBins[b];
+                if (bins.empty()) { contrastVec[b] = 0.0; continue; }
+                std::vector<double> values; values.reserve(bins.size());
+                for (size_t k : bins) values.push_back(P[k] + eps);
+                std::sort(values.begin(), values.end());
+                size_t n = values.size();
+                size_t nTop = static_cast<size_t>(std::max(1.0, std::floor(m_contrastTopPercent * static_cast<double>(n))));
+                size_t nBot = static_cast<size_t>(std::max(1.0, std::floor(m_contrastBottomPercent * static_cast<double>(n))));
+                // Mean of top nTop
+                double sumTop = 0.0; for (size_t i = n - nTop; i < n; ++i) sumTop += values[i]; double meanTop = sumTop / static_cast<double>(nTop);
+                // Mean of bottom nBot
+                double sumBot = 0.0; for (size_t i = 0; i < nBot; ++i) sumBot += values[i]; double meanBot = sumBot / static_cast<double>(nBot);
+                double ratio = (meanBot > 0.0 ? (meanTop / meanBot) : (meanTop / eps));
+                contrastVec[b] = 10.0 * std::log10(std::max(ratio, 1e-12));
+            }
+
             // Timestamp (frame start in seconds as per spec)
             double t = static_cast<double>(f) * static_cast<double>(H) / static_cast<double>(sampleRate);
 
@@ -226,6 +281,10 @@ public:
             nlohmann::json coeffs = nlohmann::json::array();
             for (double c : mfccVec) coeffs.push_back(static_cast<float>(c));
             mfcc.push_back({ {"t", t}, {"v", coeffs} });
+            // Append spectral contrast
+            nlohmann::json cvec = nlohmann::json::array();
+            for (double cv : contrastVec) cvec.push_back(static_cast<float>(cv));
+            spectralContrast.push_back({ {"t", t}, {"v", cvec} });
         }
 
         // Cleanup
@@ -234,10 +293,16 @@ public:
         fftw_free(out);
 
         const double frameRate = static_cast<double>(sampleRate) / static_cast<double>(H);
+        // Pack contrast band edges for reference/consumers
+        nlohmann::json contrastBandsMeta = nlohmann::json::array();
+        for (const auto& be : contrastBandEdges) contrastBandsMeta.push_back({be.first, be.second});
+
         nlohmann::json result = {
             {"bands", bands},
             {"mfcc", mfcc},
             {"mfccOrder", 13},
+            {"spectralContrast", spectralContrast},
+            {"spectralContrastBands", contrastBandsMeta},
             {"fftSize", N},
             {"hopSize", H},
             {"frameRate", frameRate}
@@ -254,6 +319,12 @@ private:
     size_t m_hopSize = 512;
     std::string m_windowType = "hann";
     nlohmann::json m_bandDefs = nlohmann::json::object();
+
+    // Spectral contrast parameters (tunable)
+    int m_contrastNumBands = 6;       // number of octave-like bands starting at m_contrastMinFreq
+    double m_contrastMinFreq = 60.0;  // Hz, start of first band
+    double m_contrastTopPercent = 0.2;    // fraction of top energies used as peaks
+    double m_contrastBottomPercent = 0.2; // fraction of bottom energies used as valleys
 
     static nlohmann::json makeEmptyResult(float sampleRate, size_t N, size_t H) {
         if (H == 0) H = std::max<size_t>(1, N / 4);

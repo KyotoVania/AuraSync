@@ -192,6 +192,35 @@ public:
             }
         }
 
+        // Spectral Contrast features (optional)
+        std::vector<double> noveltyMAPPED_CONTRAST(numFrames, 0.0);
+        if (spec.contains("spectralContrast") && spec["spectralContrast"].is_array() && !spec["spectralContrast"].empty()) {
+            size_t cFrames = spec["spectralContrast"].size();
+            std::vector<std::vector<double>> contrastFeat(cFrames);
+            for (size_t i = 0; i < cFrames; ++i) {
+                const auto& fr = spec["spectralContrast"][i];
+                if (fr.contains("v") && fr["v"].is_array()) {
+                    size_t D = fr["v"].size();
+                    contrastFeat[i].assign(D, 0.0);
+                    double norm2 = 0.0;
+                    for (size_t d = 0; d < D; ++d) { double vv = fr["v"][d].get<double>(); contrastFeat[i][d] = vv; norm2 += vv * vv; }
+                    if (norm2 > 1e-12) { double inv = 1.0 / std::sqrt(norm2); for (double& v : contrastFeat[i]) v *= inv; }
+                } else {
+                    contrastFeat[i] = std::vector<double>(6, 0.0);
+                }
+            }
+            if (cFrames >= static_cast<size_t>(m_kernelSize * 2 + 4)) {
+                auto ssmX = buildCosineSSM(contrastFeat);
+                auto novX = noveltyFromSSM(ssmX);
+                // Map contrast novelty to spectral timeline by nearest index
+                for (size_t t = 0; t < numFrames; ++t) {
+                    size_t idx = static_cast<size_t>(std::llround((static_cast<double>(t) * static_cast<double>(cFrames)) / std::max<size_t>(1, numFrames)));
+                    if (idx >= novX.size()) idx = novX.size() - 1;
+                    noveltyMAPPED_CONTRAST[t] = novX[idx];
+                }
+            }
+        }
+
         // Normalize each novelty to [0,1]
         auto normalize = [](std::vector<double>& v) {
             double mx = 0.0; for (double x : v) if (x > mx) mx = x; if (mx > 0.0) for (double& x : v) x /= mx;
@@ -199,21 +228,24 @@ public:
         normalize(noveltyE);
         normalize(noveltyMAPPED_MFCC);
         normalize(noveltyMAPPED_CHROMA);
+        normalize(noveltyMAPPED_CONTRAST);
 
-        // Fuse novelty curves with weights (energy=0.3, mfcc=0.35, chroma=0.35)
+        // Fuse novelty curves with weights (E=0.2, MFCC=0.3, Chroma=0.3, Contrast=0.2)
         std::vector<double> novelty(numFrames, 0.0);
-        double wE = 0.3, wM = 0.35, wC = 0.35;
+        double wE = 0.2, wM = 0.3, wC = 0.3, wX = 0.2;
         double sumW = 0.0;
         // determine availability
         bool hasE = true;
         bool hasM = false; for (double v : noveltyMAPPED_MFCC) { if (v > 0.0) { hasM = true; break; } }
         bool hasC = false; for (double v : noveltyMAPPED_CHROMA) { if (v > 0.0) { hasC = true; break; } }
-        if (hasE) sumW += wE; if (hasM) sumW += wM; if (hasC) sumW += wC; if (sumW <= 0.0) sumW = 1.0;
+        bool hasX = false; for (double v : noveltyMAPPED_CONTRAST) { if (v > 0.0) { hasX = true; break; } }
+        if (hasE) sumW += wE; if (hasM) sumW += wM; if (hasC) sumW += wC; if (hasX) sumW += wX; if (sumW <= 0.0) sumW = 1.0;
         for (size_t t = 0; t < numFrames; ++t) {
             double s = 0.0;
             if (hasE) s += wE * noveltyE[t];
             if (hasM) s += wM * noveltyMAPPED_MFCC[t];
             if (hasC) s += wC * noveltyMAPPED_CHROMA[t];
+            if (hasX) s += wX * noveltyMAPPED_CONTRAST[t];
             novelty[t] = s / sumW;
         }
 
