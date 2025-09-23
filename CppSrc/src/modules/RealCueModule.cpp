@@ -16,6 +16,7 @@ class RealCueModule : public core::IAnalysisModule {
 private:
     double m_anticipationTime = 1.5; // seconds for pre-drop cues
     double m_formalSimilarityThreshold = 0.85; // threshold for segment clustering
+    double m_consensusThreshold = 0.70; // threshold for consensus refinement on functional labels
     
 public:
     std::string getName() const override { return "Cue"; }
@@ -31,6 +32,9 @@ public:
         }
         if (config.contains("formalSimilarityThreshold")) {
             m_formalSimilarityThreshold = std::clamp(config["formalSimilarityThreshold"].get<double>(), 0.0, 1.0);
+        }
+        if (config.contains("consensusThreshold")) {
+            m_consensusThreshold = std::clamp(config["consensusThreshold"].get<double>(), 0.0, 1.0);
         }
         return true;
     }
@@ -532,6 +536,42 @@ private:
                     formal = std::string("A") + std::to_string(cid + 1); // rare
                 }
                 labeledSegments[i]["formalLabel"] = formal;
+            }
+
+            // Phase 3.1: Consensus refinement by formal group
+            // Group segments by formalLabel, determine majority functional label in each group,
+            // and if consensus exceeds threshold, enforce it across the group.
+            std::map<std::string, std::vector<size_t>> groups;
+            for (size_t i = 0; i < labeledSegments.size(); ++i) {
+                std::string f = labeledSegments[i].value("formalLabel", std::string());
+                groups[f].push_back(i);
+            }
+            auto baseFunctional = [](const std::string& L){
+                // Reduce labels like "chorus_2" to base functional label "chorus"
+                auto pos = L.find('_');
+                return (pos == std::string::npos) ? L : L.substr(0, pos);
+            };
+            for (const auto& kv : groups) {
+                const auto& idxs = kv.second;
+                if (idxs.size() < 2) continue; // nothing to refine
+                std::map<std::string, int> counts;
+                for (size_t i : idxs) {
+                    std::string lab = baseFunctional(labeledSegments[i].value("label", std::string("segment")));
+                    counts[lab]++;
+                }
+                // Find majority
+                std::string majLab; int majCount = 0;
+                for (const auto& c : counts) { if (c.second > majCount) { majCount = c.second; majLab = c.first; } }
+                double ratio = (idxs.empty() ? 0.0 : static_cast<double>(majCount) / static_cast<double>(idxs.size()));
+                if (ratio >= m_consensusThreshold && !majLab.empty()) {
+                    for (size_t i : idxs) labeledSegments[i]["label"] = majLab; // enforce consensus
+                }
+            }
+            // Re-number chorus segments chronologically after consensus to keep suffixes tidy
+            {
+                std::vector<size_t> chorusIdx;
+                for (size_t i = 0; i < labeledSegments.size(); ++i) if (baseFunctional(labeledSegments[i].value("label", std::string())) == "chorus") chorusIdx.push_back(i);
+                int num = 1; for (size_t id : chorusIdx) labeledSegments[id]["label"] = std::string("chorus_") + std::to_string(num++);
             }
         }
 
