@@ -2,7 +2,6 @@
 #include "../../include/core/AudioBuffer.h"
 #include "../../include/modules/OnsetModule.h"
 #include <nlohmann/json.hpp>
-#include <fftw3.h>
 #include <vector>
 #include <string>
 #include <cmath>
@@ -30,92 +29,82 @@ public:
 
     void reset() override {}
 
-    std::vector<std::string> getDependencies() const override { return {}; }
+    std::vector<std::string> getDependencies() const override { return {"BPM"}; }
 
-    nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext&) override {
-        const float sr = audio.getSampleRate();
-        const size_t N = m_fftSize;
-        const size_t H = m_hopSize == 0 ? std::max<size_t>(1, N / 4) : m_hopSize;
-
-        // Prepare mono signal
-        std::vector<float> mono = audio.getMono();
-        if (mono.empty()) {
-            return makeEmptyResult();
-        }
-
-        // Window
-        std::vector<float> winF;
-        if (m_windowType == "hann" || m_windowType.empty()) winF = core::window::hann(N);
-        else if (m_windowType == "hamming") winF = core::window::hamming(N);
-        else if (m_windowType == "blackman") winF = core::window::blackman(N);
-        else winF = core::window::hann(N);
-        std::vector<double> window(winF.begin(), winF.end());
-
-        // Number of frames (include last partial, zero-padded)
-        size_t numFrames = (mono.size() + H - 1) / H;
-        if (numFrames < 3) {
-            return makeEmptyResult();
-        }
-
-        // FFTW setup
-        double* in = (double*)fftw_malloc(sizeof(double) * N);
-        if (!in) return makeEmptyResult();
-        fftw_complex* out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1));
-        if (!out) { fftw_free(in); return makeEmptyResult(); }
-        fftw_plan plan = fftw_plan_dft_r2c_1d(static_cast<int>(N), in, out, FFTW_ESTIMATE);
-
-        std::vector<double> prevLogMag(N / 2 + 1, std::log(1e-10));
-        std::vector<double> odf; odf.reserve(numFrames);
-
-        for (size_t f = 0; f < numFrames; ++f) {
-            const size_t start = f * H;
-            for (size_t i = 0; i < N; ++i) {
-                size_t idx = start + i;
-                double s = (idx < mono.size()) ? static_cast<double>(mono[idx]) : 0.0;
-                in[i] = s * window[i];
+    nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext& context) override {
+        // 1. Retrieve ODF from BPM module result
+        nlohmann::json odfJson = nlohmann::json::array();
+        auto bpmResultOpt = context.getModuleResult("BPM");
+        if (bpmResultOpt && (*bpmResultOpt).contains("internal") && (*bpmResultOpt)["internal"].contains("odf") && (*bpmResultOpt)["internal"]["odf"].is_array() && !(*bpmResultOpt)["internal"]["odf"].empty()) {
+            odfJson = (*bpmResultOpt)["internal"]["odf"];
+        } else {
+            // Compatibility fallback: compute a simple energy-based ODF directly
+            // using Onset module settings (time-domain, no FFT)
+            const size_t N = m_fftSize;
+            const size_t H = m_hopSize == 0 ? std::max<size_t>(1, N / 4) : m_hopSize;
+            const double sr = context.sampleRate;
+            std::vector<float> mono = audio.getMono();
+            if (!mono.empty()) {
+                // Hann window for energy computation
+                std::vector<float> winF = core::window::hann(N);
+                std::vector<double> window(winF.begin(), winF.end());
+                const size_t numFrames = (mono.size() + H - 1) / H;
+                std::vector<double> energy(numFrames, 0.0);
+                for (size_t f = 0; f < numFrames; ++f) {
+                    const size_t start = f * H;
+                    double e = 0.0;
+                    for (size_t i = 0; i < N; ++i) {
+                        size_t idx = start + i;
+                        double s = (idx < mono.size()) ? static_cast<double>(mono[idx]) : 0.0;
+                        e += (s * s) * window[i];
+                    }
+                    energy[f] = e;
+                }
+                // Half-wave rectified energy difference as ODF
+                std::vector<double> odfVals; odfVals.resize(energy.size(), 0.0);
+                for (size_t t = 1; t < energy.size(); ++t) {
+                    double d = energy[t] - energy[t - 1];
+                    if (d > 0.0) odfVals[t] = d; else odfVals[t] = 0.0;
+                }
+                // Build JSON [{t,v}]
+                odfJson = nlohmann::json::array();
+                for (size_t i = 0; i < odfVals.size(); ++i) {
+                    double tSec = static_cast<double>(i) * (static_cast<double>(H) / sr);
+                    odfJson.push_back({{"t", tSec}, {"v", odfVals[i]}});
+                }
             }
-            fftw_execute(plan);
-
-            double flux = 0.0;
-            for (size_t k = 0; k < (N / 2 + 1); ++k) {
-                double re = out[k][0];
-                double im = out[k][1];
-                double mag = std::hypot(re, im);
-                double logMag = std::log(mag + 1e-10);
-                double d = logMag - prevLogMag[k];
-                if (d > 0.0) flux += d; // half-wave rectified spectral flux (log magnitude)
-                prevLogMag[k] = logMag;
-            }
-            odf.push_back(flux);
         }
 
-        fftw_destroy_plan(plan);
-        fftw_free(in);
-        fftw_free(out);
+        // 2. Convert JSON to raw ODF values
+        std::vector<double> odfValues;
+        odfValues.reserve(odfJson.size());
+        for (const auto& frame : odfJson) {
+            if (frame.contains("v")) odfValues.push_back(frame["v"].get<double>());
+            else odfValues.push_back(0.0);
+        }
 
-        // Smooth ODF with small moving average to reduce ripples
-        std::vector<double> odfSm(odf.size(), 0.0);
-        int smoothRadius = 4; // window radius -> 9-point average
-        if (!odf.empty()) {
-            for (size_t t = 0; t < odf.size(); ++t) {
+        // Optional smoothing to reduce ripples
+        std::vector<double> odfSm(odfValues.size(), 0.0);
+        int smoothRadius = 4; // 9-point moving average
+        if (!odfValues.empty()) {
+            for (size_t t = 0; t < odfValues.size(); ++t) {
                 int a = static_cast<int>(t) - smoothRadius;
                 int b = static_cast<int>(t) + smoothRadius;
                 a = std::max<int>(0, a);
-                b = std::min<int>(static_cast<int>(odf.size()) - 1, b);
+                b = std::min<int>(static_cast<int>(odfValues.size()) - 1, b);
                 double sum = 0.0; int cnt = 0;
-                for (int i = a; i <= b; ++i) { sum += odf[static_cast<size_t>(i)]; ++cnt; }
+                for (int i = a; i <= b; ++i) { sum += odfValues[static_cast<size_t>(i)]; ++cnt; }
                 odfSm[t] = cnt ? (sum / cnt) : 0.0;
             }
         }
 
-        // Peak picking: local maxima above adaptive threshold on smoothed ODF
+        // 3. Peak picking on smoothed ODF
         std::vector<size_t> peakIdx;
         if (odfSm.size() >= 3) {
             const int W = m_peakMeanWindow;
             const int minDist = std::max(1, W / 2);
             const int prePost = std::max(1, W / 2);
             for (size_t t = 1; t + 1 < odfSm.size(); ++t) {
-                // Wider local maximum test over [t-prePost, t+prePost]
                 int pmA = static_cast<int>(t) - prePost;
                 int pmB = static_cast<int>(t) + prePost;
                 pmA = std::max<int>(0, pmA);
@@ -126,20 +115,18 @@ public:
                 }
                 if (!isMax) continue;
                 int a = static_cast<int>(t) - W;
-                int b = static_cast<int>(t) - 1; // causal mean: up to t-1
+                int b = static_cast<int>(t) - 1;
                 a = std::max<int>(0, a);
                 b = std::max<int>(a, b);
                 double sum = 0.0; int cnt = 0;
                 for (int i = a; i <= b; ++i) { sum += odfSm[static_cast<size_t>(i)]; ++cnt; }
                 double mean = cnt ? (sum / cnt) : 0.0;
-                if (mean < 1e-6) continue; // gate out near-silence regions
+                if (mean < 1e-6) continue;
                 double mult = (1.0 + (m_sensitivity * m_peakThreshold));
                 double thresh = mean * mult;
                 if (odfSm[t] >= thresh) {
-                    // Enforce minimum distance between peaks
                     if (!peakIdx.empty()) {
                         if (static_cast<int>(t) - static_cast<int>(peakIdx.back()) < minDist) {
-                            // Keep the stronger peak
                             if (odfSm[t] > odfSm[peakIdx.back()]) {
                                 peakIdx.back() = t;
                             }
@@ -151,28 +138,25 @@ public:
             }
         }
 
-        // Build output (compensate timestamp by smoothing radius in frames)
+        // 4. Build output using timestamps from ODF JSON
         nlohmann::json onsets = nlohmann::json::array();
+        double framePeriod = 0.0;
+        if (odfJson.size() >= 2 && odfJson[0].contains("t") && odfJson[1].contains("t")) {
+            framePeriod = odfJson[1]["t"].get<double>() - odfJson[0]["t"].get<double>();
+            if (framePeriod < 0.0) framePeriod = 0.0;
+        }
+        const double timeComp = static_cast<double>(smoothRadius) * framePeriod;
         for (size_t idx : peakIdx) {
-            double tSec = static_cast<double>(idx + static_cast<size_t>(smoothRadius)) * static_cast<double>(H) / static_cast<double>(sr);
-            // Use the smoothed ODF value as peak strength for robustness
+            double tSec = odfJson[idx].contains("t") ? odfJson[idx]["t"].get<double>() : static_cast<double>(idx) * framePeriod;
+            tSec += timeComp;
             onsets.push_back({ {"t", tSec}, {"strength", odfSm[idx]} });
         }
 
-        nlohmann::json result = {
+        return {
             {"onsets", onsets},
             {"count", onsets.size()},
             {"sensitivity", m_sensitivity}
         };
-        if (m_debug) {
-            nlohmann::json odfArr = nlohmann::json::array();
-            for (size_t i = 0; i < odfSm.size(); ++i) {
-                double tSec = static_cast<double>(i) * static_cast<double>(H) / static_cast<double>(sr);
-                odfArr.push_back({{"t", tSec}, {"v", odfSm[i]}});
-            }
-            result["debug"] = nlohmann::json{{"odf", odfArr}};
-        }
-        return result;
     }
 
     bool validateOutput(const nlohmann::json& output) const override {

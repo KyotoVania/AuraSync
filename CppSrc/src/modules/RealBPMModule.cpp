@@ -91,7 +91,17 @@ public:
         if (m_useQMDSP) {
             std::vector<double> beatTimes = processWithQMDSP(mono, sr, audio.getDuration());
             if (beatTimes.empty()) return makeResultFallback(audio.getDuration());
-            return generateBeatTrackingResult(beatTimes, audio.getDuration());
+            nlohmann::json bpmResult = generateBeatTrackingResult(beatTimes, audio.getDuration());
+            // Attach ODF from QM-DSP path if available
+            nlohmann::json odfJson = nlohmann::json::array();
+            if (!m_lastODF.empty() && m_lastODFFrameRate > 0.0) {
+                for (size_t i = 0; i < m_lastODF.size(); ++i) {
+                    double tSec = static_cast<double>(i) / m_lastODFFrameRate;
+                    odfJson.push_back({{"t", tSec}, {"v", m_lastODF[i]}});
+                }
+            }
+            bpmResult["internal"] = {{"odf", odfJson}};
+            return bpmResult;
         }
 
         size_t N = m_cfg.frameSize;
@@ -136,7 +146,17 @@ public:
         if (beatTimes.empty()) return makeResultFallback(audio.getDuration());
 
         // STEP 5: Convert beat times to BPM and generate output
-        return generateBeatTrackingResult(beatTimes, audio.getDuration());
+        // Expose ODF for downstream modules
+        m_lastODF = odf;
+        m_lastODFFrameRate = frameRate;
+        nlohmann::json bpmResult = generateBeatTrackingResult(beatTimes, audio.getDuration());
+        nlohmann::json odfJson = nlohmann::json::array();
+        for (size_t i = 0; i < odf.size(); ++i) {
+            double tSec = static_cast<double>(i) / frameRate;
+            odfJson.push_back({{"t", tSec}, {"v", odf[i]}});
+        }
+        bpmResult["internal"] = {{"odf", odfJson}};
+        return bpmResult;
     }
 
     bool validateOutput(const nlohmann::json& output) const override {
@@ -170,6 +190,10 @@ private:
     // C2: Health flags support
     bool m_octaveSwitchedLast = false; // set true if octave correction selected an alternate grid
     std::vector<float> m_history;
+    
+    // Exposed ODF for downstream modules (e.g., Onset)
+    std::vector<double> m_lastODF;
+    double m_lastODFFrameRate = 0.0; // frames per second for m_lastODF
     
     // New beat tracking methods
     std::vector<double> extractComplexSpectralDifferenceODF(const std::vector<float>& mono, size_t N, size_t H, float sr);
@@ -979,6 +1003,9 @@ std::unique_ptr<core::IAnalysisModule> createRealBPMModule() { return std::make_
 
 // QM-DSP direct engine processing using DetectionFunction + TempoTrackV2
 std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vector<float>& mono, float sr, double duration) {
+    // Reset last ODF state
+    m_lastODF.clear();
+    m_lastODFFrameRate = 0.0;
     // Parameters aligned with Mixxx AnalyzerQueenMaryBeats
     constexpr float kStepSecs = 0.01161f;
 
@@ -1028,6 +1055,10 @@ std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vec
         df.push_back(detectionResults[i]);
         beatPeriod.push_back(0.0);
     }
+
+    // Store ODF for downstream consumers
+    m_lastODF = df;
+    m_lastODFFrameRate = (stepSize > 0) ? (static_cast<double>(sampleRate) / static_cast<double>(stepSize)) : 0.0;
 
     TempoTrackV2 tt(static_cast<float>(sampleRate), stepSize);
     tt.calculateBeatPeriod(df, beatPeriod);

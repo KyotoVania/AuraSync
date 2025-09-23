@@ -20,7 +20,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json)
 
 # FFTW3 (assuming it's in fftw-3.3.5-dll64)
-set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/fftw-3.3.5-dll64)
+set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/fftw-3.3.5-dll64)
 
 # --- Library ---
 
@@ -47,31 +47,38 @@ target_include_directories(ave_core
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${FFTW3_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp
-        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
 )
 
 # --- QM-DSP minimal static library (Mixxx-compatible) ---
 add_library(ave_qmdsp STATIC
-        mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
-        mixxx/lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp
-        mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
-        mixxx/lib/qm-dsp/dsp/transforms/FFT.cpp
-        mixxx/lib/qm-dsp/ext/kissfft/kiss_fft.c
-        mixxx/lib/qm-dsp/ext/kissfft/tools/kiss_fftr.c
-        mixxx/lib/qm-dsp/maths/MathUtilities.cpp
-        mixxx/lib/qm-dsp/maths/Correlation.cpp
-        mixxx/lib/qm-dsp/dsp/signalconditioning/DFProcess.cpp
-        mixxx/lib/qm-dsp/dsp/signalconditioning/Filter.cpp
-        mixxx/lib/qm-dsp/dsp/signalconditioning/FiltFilt.cpp
-        mixxx/lib/qm-dsp/dsp/signalconditioning/Framer.cpp
+        lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
+        lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp
+        lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
+        lib/qm-dsp/dsp/transforms/FFT.cpp
+        lib/qm-dsp/ext/kissfft/kiss_fft.c
+        lib/qm-dsp/ext/kissfft/tools/kiss_fftr.c
+        lib/qm-dsp/maths/MathUtilities.cpp
+        lib/qm-dsp/maths/Correlation.cpp
+        lib/qm-dsp/dsp/signalconditioning/DFProcess.cpp
+        lib/qm-dsp/dsp/signalconditioning/Filter.cpp
+        lib/qm-dsp/dsp/signalconditioning/FiltFilt.cpp
+        lib/qm-dsp/dsp/signalconditioning/Framer.cpp
+        # Key detection dependencies
+        lib/qm-dsp/base/Pitch.cpp
+        lib/qm-dsp/dsp/chromagram/Chromagram.cpp
+        lib/qm-dsp/dsp/chromagram/ConstantQ.cpp
+        lib/qm-dsp/dsp/rateconversion/Decimator.cpp
+        lib/qm-dsp/dsp/rateconversion/DecimatorB.cpp
+        lib/qm-dsp/dsp/keydetection/GetKeyMode.cpp
 )
 
 # The qm-dsp sources use relative includes like <dsp/...> so we point include dirs to the qm-dsp root
 # and to its include directory if present.
 target_include_directories(ave_qmdsp PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp
-        ${CMAKE_CURRENT_SOURCE_DIR}/mixxx/lib/qm-dsp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
 )
 
 # Silence warnings for external code if needed

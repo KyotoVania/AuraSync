@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
         });
 
         pipeline->setModuleConfig("Spectral", {
-            {"fftSize", 2048},
+            {"fftSize", 4096},
             {"hopSize", 512}
         });
 

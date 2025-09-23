@@ -115,9 +115,60 @@ public:
             }
         }
 
+        // Prepare MFCC computation (Mel filterbank + DCT-II)
+        const int numMelBands = 40;
+        const int numCoeffs = 13;
+        const double fmin = 20.0;
+        const double fmax = nyquist;
+        auto hzToMel = [](double f) { return 2595.0 * std::log10(1.0 + f / 700.0); };
+        auto melToHz = [](double m) { return 700.0 * (std::pow(10.0, m / 2595.0) - 1.0); };
+        // Mel points
+        std::vector<double> melPoints(numMelBands + 2);
+        double melMin = hzToMel(fmin);
+        double melMax = hzToMel(fmax);
+        for (int i = 0; i < numMelBands + 2; ++i) {
+            melPoints[static_cast<size_t>(i)] = melMin + (melMax - melMin) * (static_cast<double>(i) / static_cast<double>(numMelBands + 1));
+        }
+        // Convert mel points to FFT bin indices
+        std::vector<size_t> binPoints(numMelBands + 2);
+        for (int i = 0; i < numMelBands + 2; ++i) {
+            double hz = melToHz(melPoints[static_cast<size_t>(i)]);
+            size_t bin = static_cast<size_t>(std::floor((hz * static_cast<double>(N)) / static_cast<double>(sampleRate)));
+            if (bin >= numBins) bin = numBins - 1;
+            binPoints[static_cast<size_t>(i)] = bin;
+        }
+        // Build triangular mel filterbank weights W[numMelBands][numBins]
+        std::vector<std::vector<double>> melW(static_cast<size_t>(numMelBands), std::vector<double>(numBins, 0.0));
+        for (int m = 0; m < numMelBands; ++m) {
+            size_t a = binPoints[static_cast<size_t>(m)];
+            size_t b = binPoints[static_cast<size_t>(m + 1)];
+            size_t c = binPoints[static_cast<size_t>(m + 2)];
+            if (a == b) { if (b > 0) --a; }
+            if (b == c) { if (c + 1 < numBins) ++c; }
+            for (size_t k = a; k < b; ++k) {
+                double w = (b == a) ? 0.0 : (static_cast<double>(k) - static_cast<double>(a)) / (static_cast<double>(b) - static_cast<double>(a));
+                melW[static_cast<size_t>(m)][k] = std::max(0.0, std::min(1.0, w));
+            }
+            for (size_t k = b; k <= c && k < numBins; ++k) {
+                double w = (c == b) ? 0.0 : (static_cast<double>(c) - static_cast<double>(k)) / (static_cast<double>(c) - static_cast<double>(b));
+                melW[static_cast<size_t>(m)][k] = std::max(0.0, std::min(1.0, w));
+            }
+        }
+        // Precompute DCT-II matrix [numCoeffs x numMelBands]
+        std::vector<std::vector<double>> dct(static_cast<size_t>(numCoeffs), std::vector<double>(static_cast<size_t>(numMelBands), 0.0));
+        const double scale0 = std::sqrt(1.0 / static_cast<double>(numMelBands));
+        const double scale = std::sqrt(2.0 / static_cast<double>(numMelBands));
+        for (int c = 0; c < numCoeffs; ++c) {
+            for (int m = 0; m < numMelBands; ++m) {
+                double val = std::cos(M_PI * static_cast<double>(c) * (static_cast<double>(m) + 0.5) / static_cast<double>(numMelBands));
+                dct[static_cast<size_t>(c)][static_cast<size_t>(m)] = (c == 0 ? scale0 : scale) * val;
+            }
+        }
+
         // Output structure
         nlohmann::json bands = nlohmann::json::object();
         for (const auto& name : bandNames) bands[name] = nlohmann::json::array();
+        nlohmann::json mfcc = nlohmann::json::array();
 
         // STFT loop
         for (size_t f = 0; f < numFrames; ++f) {
@@ -132,14 +183,36 @@ public:
             // Execute FFT
             fftw_execute(plan);
 
-            // Aggregate power per band
-            std::vector<double> bandEnergy(bandNames.size(), 0.0);
+            // Compute power spectrum vector P
+            std::vector<double> P(numBins, 0.0);
             for (size_t k = 0; k < numBins; ++k) {
                 double re = out[k][0];
                 double im = out[k][1];
-                double p = re * re + im * im; // power spectrum
+                P[k] = re * re + im * im; // power spectrum
+            }
+
+            // Aggregate power per band (5-band energies)
+            std::vector<double> bandEnergy(bandNames.size(), 0.0);
+            for (size_t k = 0; k < numBins; ++k) {
                 int b = binToBand[k];
-                if (b >= 0) bandEnergy[static_cast<size_t>(b)] += p;
+                if (b >= 0) bandEnergy[static_cast<size_t>(b)] += P[k];
+            }
+
+            // Compute Mel energies and MFCCs
+            std::vector<double> melE(static_cast<size_t>(numMelBands), 0.0);
+            for (int m = 0; m < numMelBands; ++m) {
+                double s = 0.0;
+                for (size_t k = 0; k < numBins; ++k) s += P[k] * melW[static_cast<size_t>(m)][k];
+                melE[static_cast<size_t>(m)] = s;
+            }
+            // log-energy
+            for (double& v : melE) v = std::log(std::max(1e-12, v));
+            // DCT-II to MFCCs
+            std::vector<double> mfccVec(static_cast<size_t>(numCoeffs), 0.0);
+            for (int c = 0; c < numCoeffs; ++c) {
+                double acc = 0.0;
+                for (int m = 0; m < numMelBands; ++m) acc += dct[static_cast<size_t>(c)][static_cast<size_t>(m)] * melE[static_cast<size_t>(m)];
+                mfccVec[static_cast<size_t>(c)] = acc;
             }
 
             // Timestamp (frame start in seconds as per spec)
@@ -149,6 +222,10 @@ public:
             for (size_t b = 0; b < bandNames.size(); ++b) {
                 bands[bandNames[b]].push_back({ {"t", t}, {"v", static_cast<float>(bandEnergy[b])} });
             }
+            // Append MFCCs
+            nlohmann::json coeffs = nlohmann::json::array();
+            for (double c : mfccVec) coeffs.push_back(static_cast<float>(c));
+            mfcc.push_back({ {"t", t}, {"v", coeffs} });
         }
 
         // Cleanup
@@ -159,6 +236,8 @@ public:
         const double frameRate = static_cast<double>(sampleRate) / static_cast<double>(H);
         nlohmann::json result = {
             {"bands", bands},
+            {"mfcc", mfcc},
+            {"mfccOrder", 13},
             {"fftSize", N},
             {"hopSize", H},
             {"frameRate", frameRate}
