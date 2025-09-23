@@ -21,6 +21,27 @@ public:
         if (config.contains("peakMeanWindow")) m_peakMeanWindow = std::max<int>(4, config["peakMeanWindow"].get<int>());
         if (config.contains("peakThreshold")) m_peakThreshold = config["peakThreshold"].get<double>();
         if (config.contains("debug")) m_debug = config["debug"].get<bool>();
+        // Optional novelty fusion weights
+        if (config.contains("noveltyWeights") && config["noveltyWeights"].is_object()) {
+            const auto& w = config["noveltyWeights"];
+            if (w.contains("energy"))   m_wE = std::max(0.0, w["energy"].get<double>());
+            if (w.contains("mfcc"))     m_wM = std::max(0.0, w["mfcc"].get<double>());
+            if (w.contains("chroma"))   m_wC = std::max(0.0, w["chroma"].get<double>());
+            if (w.contains("contrast")) m_wX = std::max(0.0, w["contrast"].get<double>());
+        } else {
+            // Backward-compatible aliases
+            if (config.contains("wE")) m_wE = std::max(0.0, config["wE"].get<double>());
+            if (config.contains("wM")) m_wM = std::max(0.0, config["wM"].get<double>());
+            if (config.contains("wC")) m_wC = std::max(0.0, config["wC"].get<double>());
+            if (config.contains("wX")) m_wX = std::max(0.0, config["wX"].get<double>());
+        }
+        // Sub-segmentation sensitivity controls
+        if (config.contains("subPeakThresholdFactor")) {
+            m_subPeakThresholdFactor = std::clamp(config["subPeakThresholdFactor"].get<double>(), 0.05, 1.0);
+        }
+        if (config.contains("subPeakWindowDivisor")) {
+            m_subPeakWindowDivisor = std::max(1, config["subPeakWindowDivisor"].get<int>());
+        }
         return true;
     }
 
@@ -232,20 +253,19 @@ public:
 
         // Fuse novelty curves with weights (E=0.2, MFCC=0.3, Chroma=0.3, Contrast=0.2)
         std::vector<double> novelty(numFrames, 0.0);
-        double wE = 0.2, wM = 0.3, wC = 0.3, wX = 0.2;
         double sumW = 0.0;
         // determine availability
         bool hasE = true;
         bool hasM = false; for (double v : noveltyMAPPED_MFCC) { if (v > 0.0) { hasM = true; break; } }
         bool hasC = false; for (double v : noveltyMAPPED_CHROMA) { if (v > 0.0) { hasC = true; break; } }
         bool hasX = false; for (double v : noveltyMAPPED_CONTRAST) { if (v > 0.0) { hasX = true; break; } }
-        if (hasE) sumW += wE; if (hasM) sumW += wM; if (hasC) sumW += wC; if (hasX) sumW += wX; if (sumW <= 0.0) sumW = 1.0;
+        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
         for (size_t t = 0; t < numFrames; ++t) {
             double s = 0.0;
-            if (hasE) s += wE * noveltyE[t];
-            if (hasM) s += wM * noveltyMAPPED_MFCC[t];
-            if (hasC) s += wC * noveltyMAPPED_CHROMA[t];
-            if (hasX) s += wX * noveltyMAPPED_CONTRAST[t];
+            if (hasE) s += m_wE * noveltyE[t];
+            if (hasM) s += m_wM * noveltyMAPPED_MFCC[t];
+            if (hasC) s += m_wC * noveltyMAPPED_CHROMA[t];
+            if (hasX) s += m_wX * noveltyMAPPED_CONTRAST[t];
             novelty[t] = s / sumW;
         }
 
@@ -385,9 +405,9 @@ public:
             double frameRate = spec["frameRate"].get<double>();
             size_t Hspec = spec.contains("hopSize") ? spec["hopSize"].get<size_t>() : 512;
             double srLoc = audio.getSampleRate();
-            // More sensitive parameters for sub-phrases
-            const double thrSub = std::max(0.01, m_peakThreshold * 0.5);
-            const int Wsub = std::max(4, m_peakMeanWindow / 2);
+            // More sensitive parameters for sub-phrases (configurable)
+            const double thrSub = std::max(0.01, m_peakThreshold * m_subPeakThresholdFactor);
+            const int Wsub = std::max(4, m_peakMeanWindow / std::max(1, m_subPeakWindowDivisor));
             const int prePostSub = std::max(1, Wsub / 2);
 
             // Downbeats for snapping (optional)
@@ -521,6 +541,14 @@ private:
     int m_peakMeanWindow = 32;       // frames
     double m_peakThreshold = 0.1;    // multiplicative increment over mean
     bool m_debug = false;
+    // Novelty fusion weights (configurable)
+    double m_wE = 0.2; // Energy
+    double m_wM = 0.3; // MFCC
+    double m_wC = 0.3; // Chroma
+    double m_wX = 0.2; // Spectral Contrast
+    // Sub-segmentation sensitivity controls
+    double m_subPeakThresholdFactor = 0.5; // thrSub = m_peakThreshold * factor
+    int m_subPeakWindowDivisor = 2;        // Wsub = m_peakMeanWindow / divisor
 
     // Phase 2.1: reusable novelty fusion and peak picking on a frame interval [startFrame, endFrame)
     // Returns {peakIndicesRelativeToRange, smoothedNoveltyCurve}
@@ -631,9 +659,9 @@ private:
         auto normalize = [](std::vector<double>& v){ double mx = 0.0; for (double x : v) if (x > mx) mx = x; if (mx > 0.0) for (double& x : v) x /= mx; };
         normalize(novE); normalize(novM); normalize(novC); normalize(novX);
         std::vector<double> novelty(L, 0.0);
-        double wE=0.2,wM=0.3,wC=0.3,wX=0.2; double sumW=0.0; bool hasE=true; bool hasM=false; for(double v:novM){ if(v>0.0){hasM=true;break;}} bool hasC=false; for(double v:novC){ if(v>0.0){hasC=true;break;}} bool hasX=false; for(double v:novX){ if(v>0.0){hasX=true;break;}}
-        if (hasE) sumW += wE; if (hasM) sumW += wM; if (hasC) sumW += wC; if (hasX) sumW += wX; if (sumW <= 0.0) sumW = 1.0;
-        for (size_t t = 0; t < L; ++t) { double s = 0.0; if (hasE) s += wE * novE[t]; if (hasM) s += wM * novM[t]; if (hasC) s += wC * novC[t]; if (hasX) s += wX * novX[t]; novelty[t] = s / sumW; }
+        double sumW=0.0; bool hasE=true; bool hasM=false; for(double v:novM){ if(v>0.0){hasM=true;break;}} bool hasC=false; for(double v:novC){ if(v>0.0){hasC=true;break;}} bool hasX=false; for(double v:novX){ if(v>0.0){hasX=true;break;}}
+        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
+        for (size_t t = 0; t < L; ++t) { double s = 0.0; if (hasE) s += m_wE * novE[t]; if (hasM) s += m_wM * novM[t]; if (hasC) s += m_wC * novC[t]; if (hasX) s += m_wX * novX[t]; novelty[t] = s / sumW; }
         // Smooth
         noveltySm.assign(L, 0.0);
         int smoothRadius = std::max(4, kernelSize / 8);

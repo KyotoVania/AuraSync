@@ -394,12 +394,30 @@ private:
         };
         auto calculateBuildupScore = [&](const SegmentFeatures& cur, const SegmentFeatures* prev){
             double energyIncrease = 0.0, onsetIncrease = 0.0;
+            double lowBuildup = 0.0;
+            double nLowCur = rLow.norm(cur.lowEnergy);
             if (prev) {
-                energyIncrease = std::max(0.0, rOverall.norm(cur.overallEnergy) - rOverall.norm(prev->overallEnergy));
-                onsetIncrease = std::max(0.0, rOnset.norm(cur.onsetDensity) - rOnset.norm(prev->onsetDensity));
+                double nOverallCur = rOverall.norm(cur.overallEnergy);
+                double nOverallPrev = rOverall.norm(prev->overallEnergy);
+                double nOnsetCur = rOnset.norm(cur.onsetDensity);
+                double nOnsetPrev = rOnset.norm(prev->onsetDensity);
+                double nLowPrev = rLow.norm(prev->lowEnergy);
+                energyIncrease = std::max(0.0, nOverallCur - nOverallPrev);
+                onsetIncrease = std::max(0.0, nOnsetCur - nOnsetPrev);
+                // Favor low-bass reduction or stagnation (kick drop) before the impact
+                double lowDrop = std::max(0.0, nLowPrev - nLowCur); // positive if current low < previous low
+                double lowCut = 1.0 - nLowCur; // absolute bass cut helps too
+                lowBuildup = 0.7 * lowDrop + 0.3 * lowCut;
+                // Penalize cases where bass increases together with onset spike (likely the drop itself)
+                if ((nLowCur > nLowPrev + 0.10) && (onsetIncrease > 0.20)) {
+                    lowBuildup *= 0.8;
+                }
+            } else {
+                // No previous context: rely on absolute low cut only
+                lowBuildup = 1.0 - nLowCur;
             }
-            double lowEnergyCut = 1.0 - rLow.norm(cur.lowEnergy);
-            return 0.5*energyIncrease + 0.3*onsetIncrease + 0.2*lowEnergyCut;
+            // Slightly emphasize rhythmic density growth for buildup feeling
+            return 0.4*energyIncrease + 0.35*onsetIncrease + 0.25*lowBuildup;
         };
         auto calculateOutroScore = [&](const SegmentFeatures& cur, const SegmentFeatures* prev, bool isLast){
             double rel = cur.relativePosition; // already [0..1]
