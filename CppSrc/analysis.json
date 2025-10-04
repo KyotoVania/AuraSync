@@ -1,5 +1,5 @@
 {
-  "analysisId": "analysis_154701571",
+  "analysisId": "analysis_155335366",
   "analysisMetadata": {
     "modules": {
       "BPM": "1.0.0",
@@ -9,7 +9,7 @@
       "Structure": "1.0.0",
       "Tonality": "1.0.0"
     },
-    "processingTime": 159.675
+    "processingTime": 151.379
   },
   "audio": {
     "channels": 2,
@@ -11139,7 +11139,7 @@
       }
     ]
   },
-  "timestamp": "2025-10-04T19:40:38Z",
+  "timestamp": "2025-10-04T19:51:12Z",
   "tonality": {
     "chromaVector": [
       0.2063917575199961,

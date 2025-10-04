@@ -26,13 +26,11 @@ public:
         if (config.contains("bandDefinitions")) {
             m_bandDefs = config["bandDefinitions"];
         } else {
-            // Default 5 bands
+            // Default 3 bands for backward compatibility
             m_bandDefs = {
                 {"low", {0.0, 250.0}},
-                {"lowMid", {250.0, 500.0}},
-                {"mid", {500.0, 2000.0}},
-                {"highMid", {2000.0, 4000.0}},
-                {"high", {4000.0, 22050.0}}
+                {"mid", {250.0, 4000.0}},
+                {"high", {4000.0, 20000.0}}
             };
         }
         // Spectral contrast params (tunable)
@@ -294,30 +292,18 @@ public:
         // Optional extended spectral timeline pass
         nlohmann::json timelineObj;
         if (m_extendedMode) {
-            // Define simple 3-band ranges (Hz)
-            const double nyq = sampleRate / 2.0;
-            const double lowHi = 250.0;
-            const double midHi = 4000.0;
-
-            // Precompute simple band mapping per bin
-            std::vector<int> binToSimpleBand(numBins, -1); // 0=low,1=mid,2=high
-            for (size_t k = 0; k < numBins; ++k) {
-                double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
-                if (fk < lowHi) binToSimpleBand[k] = 0;
-                else if (fk < midHi) binToSimpleBand[k] = 1;
-                else if (fk <= nyq) binToSimpleBand[k] = 2;
-            }
-
             // Timeline hop based on requested resolution
             const double desiredRes = static_cast<double>(std::max(1, m_timelineResolutionHz));
             const size_t hopT = std::max<size_t>(1, static_cast<size_t>(std::floor(static_cast<double>(sampleRate) / desiredRes)));
             const size_t numFramesT = (mono.size() + hopT - 1) / hopT;
 
+            // Prepare dynamic bands container based on configured bandDefinitions
             nlohmann::json timelineBands = nlohmann::json::object();
-            timelineBands["low"] = nlohmann::json::array();
-            timelineBands["mid"] = nlohmann::json::array();
-            timelineBands["high"] = nlohmann::json::array();
+            for (const auto& name : bandNames) {
+                timelineBands[name] = nlohmann::json::array();
+            }
 
+            // Process at timeline resolution using the same FFT size and window
             for (size_t f = 0; f < numFramesT; ++f) {
                 const size_t start = f * hopT;
                 // Fill FFT input for this timeline frame
@@ -335,17 +321,15 @@ public:
                     double im = out[k][1];
                     P[k] = re * re + im * im;
                 }
-                // Aggregate low/mid/high
-                double eLow = 0.0, eMid = 0.0, eHigh = 0.0;
+                // Aggregate dynamically per configured band
+                std::vector<double> e(bandNames.size(), 0.0);
                 for (size_t k = 0; k < numBins; ++k) {
-                    int b = binToSimpleBand[k];
-                    if (b == 0) eLow += P[k];
-                    else if (b == 1) eMid += P[k];
-                    else if (b == 2) eHigh += P[k];
+                    int b = binToBand[k];
+                    if (b >= 0) e[static_cast<size_t>(b)] += P[k];
                 }
-                timelineBands["low"].push_back(static_cast<float>(eLow));
-                timelineBands["mid"].push_back(static_cast<float>(eMid));
-                timelineBands["high"].push_back(static_cast<float>(eHigh));
+                for (size_t b = 0; b < bandNames.size(); ++b) {
+                    timelineBands[bandNames[b]].push_back(static_cast<float>(e[b]));
+                }
             }
 
             timelineObj = {
