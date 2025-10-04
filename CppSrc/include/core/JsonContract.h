@@ -68,6 +68,9 @@ public:
                 {"fftSize", spectral["fftSize"]},
                 {"frameRate", spectral["frameRate"]}
             };
+            if (spectral.contains("spectralTimeline")) {
+                output["features"]["spectralTimeline"] = spectral["spectralTimeline"];
+            }
         }
         
         if (moduleResults.count("Onset")) {

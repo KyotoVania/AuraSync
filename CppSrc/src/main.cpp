@@ -12,6 +12,7 @@
 #include "../include/modules/TonalityModule.h"
 #include "../include/modules/StructureModule.h"
 #include "../include/pipeline/AudioLoader.h"
+#include <nlohmann/json.hpp>
 
 // Forward declarations for module factories
 namespace ave::modules {
@@ -50,9 +51,10 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Audio Visual Engine - Analysis Pipeline ===" << std::endl;
     std::cout << "Version: 1.0.0-prototype" << std::endl << std::endl;
 
-    // Parse arguments
+    // Parse arguments (inputPath, outputPath, configPath)
     std::string inputFile = argc > 1 ? argv[1] : "test.wav";
     std::string outputFile = argc > 2 ? argv[2] : "analysis.json";
+    std::string configPath = argc > 3 ? argv[3] : "config.json";
 
     try {
         // 1. Load audio
@@ -72,34 +74,94 @@ int main(int argc, char* argv[]) {
         pipeline->registerModule(ave::modules::createRealSpectralModule());
         pipeline->registerModule(ave::modules::createRealCueModule());
 
-        // Configure modules
-        pipeline->setModuleConfig("BPM", {
-            {"minBPM", 20},
-            {"maxBPM", 220},
-            {"frameSize", 1024},
-            {"hopSize", 512},
-            {"acfWindowSec", 8.0},
-            {"historySize", 10},
-            {"octaveCorrection", true},
-            {"engine", "qm"}
-        });
+        // Load configuration file (JSON) with robust fallbacks for common runtime dirs
+        nlohmann::json cfg;
+        bool cfgLoaded = false;
+        std::string cfgUsedPath = configPath;
+        {
+            // Try provided path first, then try relative fallbacks (useful when running from cmake-build-*/bin)
+            std::vector<std::string> candidates;
+            candidates.push_back(configPath);
+            // Derive just the filename in case a relative path with dirs was provided
+            std::string fileName = configPath;
+            size_t posSlash = fileName.find_last_of("/\\");
+            if (posSlash != std::string::npos) fileName = fileName.substr(posSlash + 1);
+            candidates.push_back(std::string("..\\..\\") + fileName);
+            candidates.push_back(std::string("..\\") + fileName);
 
-        pipeline->setModuleConfig("Onset", {
-            {"sensitivity", 0.5}
-        });
+            for (const auto& p : candidates) {
+                std::ifstream cfgIn(p);
+                if (!cfgIn.is_open()) continue;
+                try {
+                    cfgIn >> cfg;
+                    cfgLoaded = true;
+                    cfgUsedPath = p;
+                    std::cout << "[Config] Loaded configuration from: " << p << std::endl;
+                    break;
+                } catch (const std::exception& e) {
+                    std::cerr << "[Config] Failed to parse JSON ('" << p << "'): " << e.what() << std::endl;
+                }
+            }
+            if (!cfgLoaded) {
+                std::cerr << "[Config] Could not open provided or fallback config paths. Using built-in defaults. Tried: ";
+                for (size_t i = 0; i < candidates.size(); ++i) {
+                    std::cerr << (i ? ", " : "") << candidates[i];
+                }
+                std::cerr << std::endl;
+            }
+        }
 
-        pipeline->setModuleConfig("Structure", {
-            {"segmentMinLength", 8.0}
-        });
+        if (!cfgLoaded) {
+            // Built-in default config mirroring previous hard-coded values
+            cfg = {
+                {"modules", {
+                    {"BPM", {
+                        {"enabled", true},
+                        {"config", {{"minBPM",20},{"maxBPM",220},{"frameSize",1024},{"hopSize",512},{"acfWindowSec",8.0},{"historySize",10},{"octaveCorrection",true},{"engine","qm"}}}
+                    }},
+                    {"Onset", {
+                        {"enabled", true},
+                        {"config", {{"sensitivity",0.5}}}
+                    }},
+                    {"Structure", {
+                        {"enabled", true},
+                        {"config", {{"segmentMinLength",8.0}}}
+                    }},
+                    {"Spectral", {
+                        {"enabled", true},
+                        {"config", {{"fftSize",4096},{"hopSize",512},{"extendedMode",false},{"timelineResolutionHz",100}}}
+                    }},
+                    {"Tonality", {
+                        {"enabled", true},
+                        {"config", nlohmann::json::object()}
+                    }},
+                    {"Cue", {
+                        {"enabled", true},
+                        {"config", {{"anticipationTime",1.5}}}
+                    }}
+                }}
+            };
+        }
 
-        pipeline->setModuleConfig("Spectral", {
-            {"fftSize", 4096},
-            {"hopSize", 512}
-        });
-
-        pipeline->setModuleConfig("Cue", {
-            {"anticipationTime", 1.5}
-        });
+        // Apply module enablement and configuration
+        if (cfg.contains("modules") && cfg["modules"].is_object()) {
+            for (auto& it : cfg["modules"].items()) {
+                const std::string name = it.key();
+                const auto& m = it.value();
+                bool enabled = true;
+                if (m.contains("enabled")) {
+                    try { enabled = m["enabled"].get<bool>(); } catch (...) { enabled = true; }
+                }
+                pipeline->enableModule(name, enabled);
+                std::cout << "[Config] Module '" << name << "' is " << (enabled ? "ENABLED" : "DISABLED") << std::endl;
+                if (enabled && m.contains("config")) {
+                    pipeline->setModuleConfig(name, m["config"]);
+                    std::cout << "[Config] Applied settings to '" << name << "'" << std::endl;
+                }
+            }
+        } else {
+            std::cerr << "[Config] No 'modules' object found in configuration; using defaults for all modules." << std::endl;
+        }
 
         // Validate dependencies
         if (!pipeline->validateDependencies()) {

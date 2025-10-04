@@ -397,121 +397,8 @@ public:
             segments.push_back({{"start", t0}, {"end", dur}, {"label", std::string("segment_") + std::to_string(bi)}, {"confidence", conf}});
         }
 
-        // Phase 2.2 (revised): Hierarchical analysis via multi-scale peak picking on the SINGLE global novelty curve
-        // We DO NOT recompute SSMs/novelty inside segments anymore. Instead, we:
-        // 1) Extract the portion of the smoothed global novelty (noveltySm) belonging to each main segment.
-        // 2) Run a more sensitive peak picker on that sub-curve only (lower threshold, smaller mean window).
-        if (spec.contains("frameRate")) {
-            double frameRate = spec["frameRate"].get<double>();
-            size_t Hspec = spec.contains("hopSize") ? spec["hopSize"].get<size_t>() : 512;
-            double srLoc = audio.getSampleRate();
-            // More sensitive parameters for sub-phrases (configurable)
-            const double thrSub = std::max(0.01, m_peakThreshold * m_subPeakThresholdFactor);
-            const int Wsub = std::max(4, m_peakMeanWindow / std::max(1, m_subPeakWindowDivisor));
-            const int prePostSub = std::max(1, Wsub / 2);
-
-            // Downbeats for snapping (optional)
-            std::vector<double> downbeatsVec;
-            if (auto bpmOpt = context.getModuleResult("BPM"); bpmOpt && (*bpmOpt).contains("downbeats") && (*bpmOpt)["downbeats"].is_array()) {
-                for (const auto& db : (*bpmOpt)["downbeats"]) downbeatsVec.push_back(db.get<double>());
-            }
-            auto snapTimes = [&downbeatsVec](std::vector<double>& times){
-                if (downbeatsVec.empty()) return;
-                for (double& bt : times) {
-                    double bestT = bt; double bestD = 1e12;
-                    for (double dbt : downbeatsVec) { double d = std::abs(dbt - bt); if (d < bestD) { bestD = d; bestT = dbt; } }
-                    bt = bestT;
-                }
-                // deduplicate near-equals
-                std::sort(times.begin(), times.end());
-                std::vector<double> tmp;
-                const double minGap=0.1;
-                for (double t : times){ if (tmp.empty() || std::abs(t - tmp.back()) >= minGap) tmp.push_back(t);}
-                times.swap(tmp);
-            };
-
-            // Helper: peak picking on a given novelty sub-curve with sensitive params
-            auto findPeaksOnCurve = [&](const std::vector<double>& cur) {
-                std::vector<size_t> peaks;
-                if (cur.size() < 3) return peaks;
-                // Global stats for z-score style gating
-                double gsum = 0.0, gsum2 = 0.0; size_t gcnt = 0;
-                for (double v : cur) { gsum += v; gsum2 += v*v; ++gcnt; }
-                double gmean = (gcnt ? (gsum / gcnt) : 0.0);
-                double gvar = (gcnt ? (gsum2 / gcnt) - gmean * gmean : 0.0); if (gvar < 0.0) gvar = 0.0; double gstd = std::sqrt(gvar);
-                // Min peak distance in frames (reuse original policy)
-                size_t minDistFrames = (frameRate > 0.0) ? static_cast<size_t>(std::floor(m_segmentMinLength * frameRate)) : static_cast<size_t>(Wsub / 2);
-                const int minDist = static_cast<int>(std::max<size_t>(static_cast<size_t>(Wsub/2), std::max<size_t>(1, minDistFrames)));
-                for (size_t t = 1; t + 1 < cur.size(); ++t) {
-                    // local maxima within pre/post window
-                    int pmA = static_cast<int>(t) - prePostSub;
-                    int pmB = static_cast<int>(t) + prePostSub;
-                    pmA = std::max<int>(0, pmA);
-                    pmB = std::min<int>(static_cast<int>(cur.size()) - 1, pmB);
-                    bool isMax = true;
-                    for (int i = pmA; i <= pmB; ++i) { if (cur[static_cast<size_t>(i)] > cur[t]) { isMax = false; break; } }
-                    if (!isMax) continue;
-                    // Local mean before t over Wsub
-                    int a = static_cast<int>(t) - Wsub; int b = static_cast<int>(t) - 1;
-                    a = std::max<int>(0, a); b = std::max<int>(a, b);
-                    double sum = 0.0; int cnt = 0; for (int i = a; i <= b; ++i) { sum += cur[static_cast<size_t>(i)]; ++cnt; }
-                    double lmean = cnt ? (sum / cnt) : 0.0;
-                    double threshLocal = lmean * (1.0 + thrSub);
-                    double threshGlobal = gmean + thrSub * gstd;
-                    double thresh = std::max(threshLocal, threshGlobal);
-                    if (cur[t] >= thresh) {
-                        if (!peaks.empty()) {
-                            if (static_cast<int>(t) - static_cast<int>(peaks.back()) < minDist) {
-                                if (cur[t] > cur[peaks.back()]) { peaks.back() = t; }
-                                continue;
-                            }
-                        }
-                        peaks.push_back(t);
-                    }
-                }
-                return peaks;
-            };
-
-            for (auto& seg : segments) {
-                double s = seg.value("start", 0.0);
-                double e = seg.value("end", s);
-                size_t i0 = static_cast<size_t>(std::floor(s * frameRate));
-                size_t i1 = static_cast<size_t>(std::ceil(e * frameRate));
-                if (i1 <= i0 + 2) { seg["sub_segments"] = nlohmann::json::array(); continue; }
-                i0 = std::min(i0, noveltySm.size());
-                i1 = std::min(i1, noveltySm.size());
-                if (i1 <= i0 + 2) { seg["sub_segments"] = nlohmann::json::array(); continue; }
-                // Extract sub-curve from global novelty
-                std::vector<double> subNoveltyCurve(noveltySm.begin() + static_cast<std::ptrdiff_t>(i0), noveltySm.begin() + static_cast<std::ptrdiff_t>(i1));
-                // Find more sensitive peaks on sub-curve
-                std::vector<size_t> subPeaks = findPeaksOnCurve(subNoveltyCurve);
-                // Convert local peak indices to seconds within [s,e]
-                std::vector<double> localTimes; localTimes.reserve(subPeaks.size());
-                for (size_t idx : subPeaks) {
-                    double tSec = static_cast<double>(i0 + idx + static_cast<size_t>(smoothRadius)) * static_cast<double>(Hspec) / static_cast<double>(srLoc);
-                    if (tSec > s && tSec < e) localTimes.push_back(tSec);
-                }
-                std::sort(localTimes.begin(), localTimes.end());
-                snapTimes(localTimes);
-                // Build sub_segments between localTimes boundaries
-                nlohmann::json subs = nlohmann::json::array();
-                double tStart = s; size_t phraseCount = 0;
-                for (double tEnd : localTimes) {
-                    if (tEnd <= tStart) continue;
-                    double conf = 0.5;
-                    // Confidence from sub-curve near boundary
-                    size_t idx = static_cast<size_t>(std::min<double>(std::max(0.0, (tEnd - s) * frameRate), static_cast<double>(subNoveltyCurve.size() - 1)));
-                    conf = subNoveltyCurve[idx];
-                    subs.push_back({{"start", tStart}, {"end", tEnd}, {"label", std::string("phrase_") + std::to_string(++phraseCount)}, {"confidence", conf}});
-                    tStart = tEnd;
-                }
-                if (tStart < e) {
-                    double conf = (subNoveltyCurve.empty() ? 0.5 : subNoveltyCurve.back());
-                    subs.push_back({{"start", tStart}, {"end", e}, {"label", std::string("phrase_") + std::to_string(++phraseCount)}, {"confidence", conf}});
-                }
-                seg["sub_segments"] = subs;
-            }
-        }
+        // Phase 2.2: Hierarchical analysis using global novelty (refactored)
+        performHierarchicalAnalysis(segments, noveltySm, spec, context, audio);
 
         nlohmann::json result = {
             {"segments", segments},
@@ -550,138 +437,119 @@ private:
     double m_subPeakThresholdFactor = 0.5; // thrSub = m_peakThreshold * factor
     int m_subPeakWindowDivisor = 2;        // Wsub = m_peakMeanWindow / divisor
 
-    // Phase 2.1: reusable novelty fusion and peak picking on a frame interval [startFrame, endFrame)
-    // Returns {peakIndicesRelativeToRange, smoothedNoveltyCurve}
-    std::pair<std::vector<size_t>, std::vector<double>> computeNoveltyAndPeaks(
+    // Phase 2.2: Multi-Scale Peak Picking on global novelty curve
+    void performHierarchicalAnalysis(
+        nlohmann::json& segments,
+        const std::vector<double>& noveltySm,
         const nlohmann::json& spec,
         const core::AnalysisContext& context,
-        size_t startFrame,
-        size_t endFrame,
-        int kernelSize
+        const core::AudioBuffer& audio
     ) const {
-        std::pair<std::vector<size_t>, std::vector<double>> out;
-        std::vector<size_t>& peakIdx = out.first;
-        std::vector<double>& noveltySm = out.second;
-        if (!spec.contains("bands")) return out;
-        if (endFrame <= startFrame) return out;
-        const auto& bands = spec["bands"];
-        static const char* NAMES[5] = {"low","lowMid","mid","highMid","high"};
-        for (const char* nm : NAMES) { if (!bands.contains(nm)) return out; }
-        const size_t numFrames = bands["low"].size();
-        startFrame = std::min(startFrame, numFrames);
-        endFrame = std::min(endFrame, numFrames);
-        if (endFrame <= startFrame) return out;
-        size_t L = endFrame - startFrame;
-        if (L < static_cast<size_t>(kernelSize * 2 + 4)) return out;
-        // Build energy features for range
-        std::vector<std::vector<double>> feats(L, std::vector<double>(5, 0.0));
-        for (size_t t = 0; t < L; ++t) {
-            size_t g = startFrame + t;
-            double v[5] = {
-                bands["low"][g].value("v", 0.0), bands["lowMid"][g].value("v", 0.0), bands["mid"][g].value("v", 0.0), bands["highMid"][g].value("v", 0.0), bands["high"][g].value("v", 0.0)
-            };
-            double n2 = std::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]+v[3]*v[3]+v[4]*v[4]);
-            if (n2 > 1e-12) for (double& x : v) x /= n2;
-            for (int i = 0; i < 5; ++i) feats[t][static_cast<size_t>(i)] = v[i];
+        if (!spec.contains("frameRate")) {
+            for (auto& seg : segments) seg["sub_segments"] = nlohmann::json::array();
+            return;
         }
-        auto buildCosineSSM = [](const std::vector<std::vector<double>>& F){
-            const size_t T = F.size();
-            std::vector<std::vector<double>> S(T, std::vector<double>(T, 0.0));
-            for (size_t i = 0; i < T; ++i) {
-                S[i][i] = 1.0;
-                for (size_t j = i + 1; j < T; ++j) {
-                    double dot = 0.0; for (size_t k = 0; k < F[i].size() && k < F[j].size(); ++k) dot += F[i][k] * F[j][k];
-                    if (dot < 0.0) dot = 0.0; if (dot > 1.0) dot = 1.0; S[i][j] = dot; S[j][i] = dot;
+        double frameRate = spec["frameRate"].get<double>();
+        size_t Hspec = spec.contains("hopSize") ? spec["hopSize"].get<size_t>() : 512;
+        double srLoc = audio.getSampleRate();
+
+        const double primaryThreshold = m_peakThreshold;
+        const int primaryWindow = m_peakMeanWindow;
+
+        const double thrSub = std::max(0.01, primaryThreshold * m_subPeakThresholdFactor);
+        const int Wsub = std::max(4, primaryWindow / std::max(1, m_subPeakWindowDivisor));
+
+        const int smoothRadius = std::max(4, m_kernelSize / 8);
+
+        std::vector<double> downbeatsVec;
+        if (auto bpmOpt = context.getModuleResult("BPM"); bpmOpt && (*bpmOpt).contains("downbeats") && (*bpmOpt)["downbeats"].is_array()) {
+            for (const auto& db : (*bpmOpt)["downbeats"]) downbeatsVec.push_back(db.get<double>());
+        }
+        auto snapTimes = [&downbeatsVec](std::vector<double>& times){
+            if (downbeatsVec.empty()) return;
+            for (double& bt : times) {
+                double bestT = bt; double bestD = 1e12;
+                for (double dbt : downbeatsVec) { double d = std::abs(dbt - bt); if (d < bestD) { bestD = d; bestT = dbt; } }
+                bt = bestT;
+            }
+            std::sort(times.begin(), times.end());
+            std::vector<double> tmp;
+            const double minGap=0.1;
+            for (double t : times){ if (tmp.empty() || std::abs(t - tmp.back()) >= minGap) tmp.push_back(t);}
+            times.swap(tmp);
+        };
+
+        auto findPeaksOnCurve = [&](const std::vector<double>& cur) {
+            std::vector<size_t> peaks;
+            if (cur.size() < 3) return peaks;
+            double gsum = 0.0, gsum2 = 0.0; size_t gcnt = 0;
+            for (double v : cur) { gsum += v; gsum2 += v*v; ++gcnt; }
+            double gmean = (gcnt ? (gsum / gcnt) : 0.0);
+            double gvar = (gcnt ? (gsum2 / gcnt) - gmean * gmean : 0.0); if (gvar < 0.0) gvar = 0.0; double gstd = std::sqrt(gvar);
+            size_t minDistFrames = (frameRate > 0.0) ? static_cast<size_t>(std::floor(m_segmentMinLength * frameRate)) : static_cast<size_t>(Wsub / 2);
+            const int minDist = static_cast<int>(std::max<size_t>(static_cast<size_t>(Wsub/2), std::max<size_t>(1, minDistFrames)));
+            const int prePostSub = std::max(1, Wsub / 2);
+            for (size_t t = 1; t + 1 < cur.size(); ++t) {
+                int pmA = static_cast<int>(t) - prePostSub;
+                int pmB = static_cast<int>(t) + prePostSub;
+                pmA = std::max<int>(0, pmA);
+                pmB = std::min<int>(static_cast<int>(cur.size()) - 1, pmB);
+                bool isMax = true;
+                for (int i = pmA; i <= pmB; ++i) { if (cur[static_cast<size_t>(i)] > cur[t]) { isMax = false; break; } }
+                if (!isMax) continue;
+                int a = static_cast<int>(t) - Wsub; int b = static_cast<int>(t) - 1;
+                a = std::max<int>(0, a); b = std::max<int>(a, b);
+                double sum = 0.0; int cnt = 0; for (int i = a; i <= b; ++i) { sum += cur[static_cast<size_t>(i)]; ++cnt; }
+                double lmean = cnt ? (sum / cnt) : 0.0;
+                double threshLocal = lmean * (1.0 + thrSub);
+                double threshGlobal = gmean + thrSub * gstd;
+                double thresh = std::max(threshLocal, threshGlobal);
+                if (cur[t] >= thresh) {
+                    if (!peaks.empty()) {
+                        if (static_cast<int>(t) - static_cast<int>(peaks.back()) < minDist) {
+                            if (cur[t] > cur[peaks.back()]) { peaks.back() = t; }
+                            continue;
+                        }
+                    }
+                    peaks.push_back(t);
                 }
             }
-            return S;
+            return peaks;
         };
-        auto noveltyFromSSM = [kernelSize](const std::vector<std::vector<double>>& S){
-            const int K = kernelSize; const size_t T = S.size(); std::vector<double> nov(T, 0.0); if (T == 0) return nov; const size_t startT = static_cast<size_t>(K); const size_t endT = (T > static_cast<size_t>(K)) ? (T - static_cast<size_t>(K)) : 0; const double area = static_cast<double>(K) * static_cast<double>(K);
-            for (size_t t = startT; t < endT; ++t) {
-                double sumTR=0.0,sumBL=0.0,sumTL=0.0,sumBR=0.0;
-                for (int di=-K; di<0; ++di){ size_t i=static_cast<size_t>(static_cast<long long>(t)+di); for (int dj=0; dj<K; ++dj){ size_t j=static_cast<size_t>(static_cast<long long>(t)+dj); sumTR += S[i][j]; }}
-                for (int di=0; di<K; ++di){ size_t i=static_cast<size_t>(t + static_cast<size_t>(di)); for (int dj=-K; dj<0; ++dj){ size_t j=static_cast<size_t>(static_cast<long long>(t)+dj); sumBL += S[i][j]; }}
-                for (int di=-K; di<0; ++di){ size_t i=static_cast<size_t>(static_cast<long long>(t)+di); for (int dj=-K; dj<0; ++dj){ size_t j=static_cast<size_t>(static_cast<long long>(t)+dj); sumTL += S[i][j]; }}
-                for (int di=0; di<K; ++di){ size_t i=static_cast<size_t>(t + static_cast<size_t>(di)); for (int dj=0; dj<K; ++dj){ size_t j=static_cast<size_t>(t + static_cast<size_t>(dj)); sumBR += S[i][j]; }}
-                double score = (sumTL + sumBR) - (sumTR + sumBL); double val = (area > 0.0) ? (score / (2.0 * area)) : score; if (val < 0.0) val = 0.0; nov[t] = val;
+
+        for (auto& seg : segments) {
+            double s = seg.value("start", 0.0);
+            double e = seg.value("end", s);
+            size_t i0 = static_cast<size_t>(std::floor(s * frameRate));
+            size_t i1 = static_cast<size_t>(std::ceil(e * frameRate));
+            if (i1 <= i0 + 2) { seg["sub_segments"] = nlohmann::json::array(); continue; }
+            i0 = std::min(i0, noveltySm.size());
+            i1 = std::min(i1, noveltySm.size());
+            if (i1 <= i0 + 2) { seg["sub_segments"] = nlohmann::json::array(); continue; }
+            std::vector<double> subNoveltyCurve(noveltySm.begin() + static_cast<std::ptrdiff_t>(i0), noveltySm.begin() + static_cast<std::ptrdiff_t>(i1));
+            std::vector<size_t> subPeaks = findPeaksOnCurve(subNoveltyCurve);
+            std::vector<double> localTimes; localTimes.reserve(subPeaks.size());
+            for (size_t idx : subPeaks) {
+                double tSec = static_cast<double>(i0 + idx + static_cast<size_t>(smoothRadius)) * static_cast<double>(Hspec) / static_cast<double>(srLoc);
+                if (tSec > s && tSec < e) localTimes.push_back(tSec);
             }
-            return nov;
-        };
-        // Energy novelty
-        auto ssmE = buildCosineSSM(feats);
-        auto novE = noveltyFromSSM(ssmE);
-        // MFCC novelty (subrange mapping)
-        std::vector<double> novM(L, 0.0);
-        if (spec.contains("mfcc") && spec["mfcc"].is_array() && !spec["mfcc"].empty()) {
-            size_t mFrames = spec["mfcc"].size();
-            size_t i0 = static_cast<size_t>(std::floor((static_cast<double>(startFrame) * mFrames) / std::max<size_t>(1, numFrames)));
-            size_t i1 = static_cast<size_t>(std::ceil((static_cast<double>(endFrame) * mFrames) / std::max<size_t>(1, numFrames)));
-            i0 = std::min(i0, mFrames); i1 = std::min(i1, mFrames); if (i1 > i0 && (i1 - i0) >= static_cast<size_t>(kernelSize * 2 + 4)) {
-                std::vector<std::vector<double>> mf(i1 - i0);
-                for (size_t i = i0; i < i1; ++i) {
-                    const auto& fr = spec["mfcc"][i]; size_t idx = i - i0; if (fr.contains("v") && fr["v"].is_array()) {
-                        size_t C = fr["v"].size(); mf[idx].assign(C, 0.0); double n2 = 0.0; for (size_t c = 0; c < C; ++c){ double vv = fr["v"][c].get<double>(); mf[idx][c] = vv; n2 += vv*vv; } if (n2>1e-12){ double inv = 1.0/std::sqrt(n2); for (double& x : mf[idx]) x *= inv; }
-                    } else { mf[idx] = std::vector<double>(13, 0.0);} }
-                auto ssmM = buildCosineSSM(mf); auto nov = noveltyFromSSM(ssmM);
-                for (size_t t = 0; t < L; ++t) { size_t j = static_cast<size_t>(std::llround((static_cast<double>(t) * nov.size()) / std::max<size_t>(1, L))); if (j >= nov.size()) j = nov.size()-1; novM[t] = nov[j]; }
+            std::sort(localTimes.begin(), localTimes.end());
+            snapTimes(localTimes);
+            nlohmann::json subs = nlohmann::json::array();
+            double tStart = s; size_t phraseCount = 0;
+            for (double tEnd : localTimes) {
+                if (tEnd <= tStart) continue;
+                size_t idx = static_cast<size_t>(std::min<double>(std::max(0.0, (tEnd - s) * frameRate), static_cast<double>(subNoveltyCurve.size() - 1)));
+                double conf = subNoveltyCurve[idx];
+                subs.push_back({{"start", tStart}, {"end", tEnd}, {"label", std::string("phrase_") + std::to_string(++phraseCount)}, {"confidence", conf}});
+                tStart = tEnd;
             }
-        }
-        // Chroma novelty (Tonality)
-        std::vector<double> novC(L, 0.0);
-        if (auto tonOpt = context.getModuleResult("Tonality"); tonOpt && (*tonOpt).contains("chromaSequence") && (*tonOpt)["chromaSequence"].is_array()) {
-            const auto& chromaSeq = (*tonOpt)["chromaSequence"]; size_t cFrames = chromaSeq.size();
-            size_t i0 = static_cast<size_t>(std::floor((static_cast<double>(startFrame) * cFrames) / std::max<size_t>(1, numFrames)));
-            size_t i1 = static_cast<size_t>(std::ceil((static_cast<double>(endFrame) * cFrames) / std::max<size_t>(1, numFrames)));
-            i0 = std::min(i0, cFrames); i1 = std::min(i1, cFrames); if (i1 > i0 && (i1 - i0) >= static_cast<size_t>(kernelSize * 2 + 4)) {
-                std::vector<std::vector<double>> cf(i1 - i0, std::vector<double>(12, 0.0));
-                for (size_t i = i0; i < i1; ++i) {
-                    size_t idx = i - i0; const auto& fr = chromaSeq[i]; if (fr.contains("v") && fr["v"].is_array()) { double n2 = 0.0; for (size_t k = 0; k < 12 && k < fr["v"].size(); ++k) { double vv = fr["v"][k].get<double>(); cf[idx][k] = vv; n2 += vv*vv; } if (n2>1e-12){ double inv = 1.0/std::sqrt(n2); for (double& x : cf[idx]) x *= inv; } }
-                }
-                auto ssmC = buildCosineSSM(cf); auto nov = noveltyFromSSM(ssmC);
-                for (size_t t = 0; t < L; ++t) { size_t j = static_cast<size_t>(std::llround((static_cast<double>(t) * nov.size()) / std::max<size_t>(1, L))); if (j >= nov.size()) j = nov.size()-1; novC[t] = nov[j]; }
+            if (tStart < e) {
+                double conf = (subNoveltyCurve.empty() ? 0.5 : subNoveltyCurve.back());
+                subs.push_back({{"start", tStart}, {"end", e}, {"label", std::string("phrase_") + std::to_string(++phraseCount)}, {"confidence", conf}});
             }
+            seg["sub_segments"] = subs;
         }
-        // Spectral contrast novelty (subrange)
-        std::vector<double> novX(L, 0.0);
-        if (spec.contains("spectralContrast") && spec["spectralContrast"].is_array() && !spec["spectralContrast"].empty()) {
-            size_t xFrames = spec["spectralContrast"].size();
-            size_t i0 = static_cast<size_t>(std::floor((static_cast<double>(startFrame) * xFrames) / std::max<size_t>(1, numFrames)));
-            size_t i1 = static_cast<size_t>(std::ceil((static_cast<double>(endFrame) * xFrames) / std::max<size_t>(1, numFrames)));
-            i0 = std::min(i0, xFrames); i1 = std::min(i1, xFrames); if (i1 > i0 && (i1 - i0) >= static_cast<size_t>(kernelSize * 2 + 4)) {
-                std::vector<std::vector<double>> xf(i1 - i0);
-                for (size_t i = i0; i < i1; ++i) { const auto& fr = spec["spectralContrast"][i]; size_t idx = i - i0; if (fr.contains("v") && fr["v"].is_array()) { size_t D = fr["v"].size(); xf[idx].assign(D, 0.0); double n2 = 0.0; for (size_t d = 0; d < D; ++d){ double vv = fr["v"][d].get<double>(); xf[idx][d] = vv; n2 += vv*vv; } if (n2>1e-12){ double inv = 1.0/std::sqrt(n2); for (double& x : xf[idx]) x *= inv; } } else { xf[idx] = std::vector<double>(6, 0.0);} }
-                auto ssmX = buildCosineSSM(xf); auto nov = noveltyFromSSM(ssmX);
-                for (size_t t = 0; t < L; ++t) { size_t j = static_cast<size_t>(std::llround((static_cast<double>(t) * nov.size()) / std::max<size_t>(1, L))); if (j >= nov.size()) j = nov.size()-1; novX[t] = nov[j]; }
-            }
-        }
-        // Normalize and fuse
-        auto normalize = [](std::vector<double>& v){ double mx = 0.0; for (double x : v) if (x > mx) mx = x; if (mx > 0.0) for (double& x : v) x /= mx; };
-        normalize(novE); normalize(novM); normalize(novC); normalize(novX);
-        std::vector<double> novelty(L, 0.0);
-        double sumW=0.0; bool hasE=true; bool hasM=false; for(double v:novM){ if(v>0.0){hasM=true;break;}} bool hasC=false; for(double v:novC){ if(v>0.0){hasC=true;break;}} bool hasX=false; for(double v:novX){ if(v>0.0){hasX=true;break;}}
-        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
-        for (size_t t = 0; t < L; ++t) { double s = 0.0; if (hasE) s += m_wE * novE[t]; if (hasM) s += m_wM * novM[t]; if (hasC) s += m_wC * novC[t]; if (hasX) s += m_wX * novX[t]; novelty[t] = s / sumW; }
-        // Smooth
-        noveltySm.assign(L, 0.0);
-        int smoothRadius = std::max(4, kernelSize / 8);
-        for (size_t t = 0; t < L; ++t) {
-            int a = static_cast<int>(t) - smoothRadius; int b = static_cast<int>(t) + smoothRadius; a = std::max<int>(0, a); b = std::min<int>(static_cast<int>(L) - 1, b); double sum = 0.0; int cnt = 0; for (int i = a; i <= b; ++i) { sum += novelty[static_cast<size_t>(i)]; ++cnt; } noveltySm[t] = cnt ? (sum / cnt) : 0.0;
-        }
-        // Peak picking (local z-score + local mean)
-        if (noveltySm.size() >= 3) {
-            const int W = m_peakMeanWindow; const int K = kernelSize; double frameRate = spec.value("frameRate", 0.0); size_t minDistFrames = (frameRate > 0.0) ? static_cast<size_t>(std::floor(m_segmentMinLength * frameRate)) : static_cast<size_t>(W / 2); const int minDist = static_cast<int>(std::max<size_t>(static_cast<size_t>(W/2), std::max<size_t>(1, minDistFrames))); const int prePost = std::max(1, W/2);
-            double gsum=0.0,gsum2=0.0; size_t gcnt=0; for (size_t i = static_cast<size_t>(K); i < noveltySm.size() - static_cast<size_t>(K); ++i) { double v = noveltySm[i]; gsum += v; gsum2 += v*v; ++gcnt; }
-            double gmean = (gcnt ? (gsum / gcnt) : 0.0); double gvar = (gcnt ? (gsum2 / gcnt) - gmean * gmean : 0.0); if (gvar < 0.0) gvar = 0.0; double gstd = std::sqrt(gvar);
-            for (size_t t = 1; t + 1 < noveltySm.size(); ++t) {
-                if (t < static_cast<size_t>(K) || t >= noveltySm.size() - static_cast<size_t>(K)) continue;
-                int pmA = static_cast<int>(t) - prePost; int pmB = static_cast<int>(t) + prePost; pmA = std::max<int>(0, pmA); pmB = std::min<int>(static_cast<int>(noveltySm.size()) - 1, pmB);
-                bool isMax = true; for (int i = pmA; i <= pmB; ++i) { if (noveltySm[static_cast<size_t>(i)] > noveltySm[t]) { isMax = false; break; } } if (!isMax) continue;
-                int a = static_cast<int>(t) - W; int b = static_cast<int>(t) - 1; a = std::max<int>(0, a); b = std::max<int>(a, b); double sum = 0.0; int cnt = 0; for (int i = a; i <= b; ++i) { sum += noveltySm[static_cast<size_t>(i)]; ++cnt; } double lmean = cnt ? (sum / cnt) : 0.0; double threshLocal = lmean * (1.0 + m_peakThreshold); double threshGlobal = gmean + m_peakThreshold * gstd; double thresh = std::max(threshLocal, threshGlobal);
-                if (noveltySm[t] >= thresh) { if (!peakIdx.empty()) { if (static_cast<int>(t) - static_cast<int>(peakIdx.back()) < minDist) { if (noveltySm[t] > noveltySm[peakIdx.back()]) { peakIdx.back() = t; } continue; } } peakIdx.push_back(t); }
-            }
-        }
-        return out;
     }
 
     static nlohmann::json makeEmptyResult() {

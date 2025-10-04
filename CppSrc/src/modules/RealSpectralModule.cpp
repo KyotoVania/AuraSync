@@ -40,6 +40,10 @@ public:
         if (config.contains("contrastMinFreq")) m_contrastMinFreq = std::max(1.0, config["contrastMinFreq"].get<double>());
         if (config.contains("contrastTopPercent")) m_contrastTopPercent = std::clamp(config["contrastTopPercent"].get<double>(), 0.01, 0.9);
         if (config.contains("contrastBottomPercent")) m_contrastBottomPercent = std::clamp(config["contrastBottomPercent"].get<double>(), 0.01, 0.9);
+
+        // Extended spectral timeline mode
+        if (config.contains("extendedMode")) m_extendedMode = config["extendedMode"].get<bool>();
+        if (config.contains("timelineResolutionHz")) m_timelineResolutionHz = std::max<int>(1, config["timelineResolutionHz"].get<int>());
         return true;
     }
 
@@ -287,6 +291,69 @@ public:
             spectralContrast.push_back({ {"t", t}, {"v", cvec} });
         }
 
+        // Optional extended spectral timeline pass
+        nlohmann::json timelineObj;
+        if (m_extendedMode) {
+            // Define simple 3-band ranges (Hz)
+            const double nyq = sampleRate / 2.0;
+            const double lowHi = 250.0;
+            const double midHi = 4000.0;
+
+            // Precompute simple band mapping per bin
+            std::vector<int> binToSimpleBand(numBins, -1); // 0=low,1=mid,2=high
+            for (size_t k = 0; k < numBins; ++k) {
+                double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
+                if (fk < lowHi) binToSimpleBand[k] = 0;
+                else if (fk < midHi) binToSimpleBand[k] = 1;
+                else if (fk <= nyq) binToSimpleBand[k] = 2;
+            }
+
+            // Timeline hop based on requested resolution
+            const double desiredRes = static_cast<double>(std::max(1, m_timelineResolutionHz));
+            const size_t hopT = std::max<size_t>(1, static_cast<size_t>(std::floor(static_cast<double>(sampleRate) / desiredRes)));
+            const size_t numFramesT = (mono.size() + hopT - 1) / hopT;
+
+            nlohmann::json timelineBands = nlohmann::json::object();
+            timelineBands["low"] = nlohmann::json::array();
+            timelineBands["mid"] = nlohmann::json::array();
+            timelineBands["high"] = nlohmann::json::array();
+
+            for (size_t f = 0; f < numFramesT; ++f) {
+                const size_t start = f * hopT;
+                // Fill FFT input for this timeline frame
+                for (size_t i = 0; i < N; ++i) {
+                    size_t idx = start + i;
+                    double s = (idx < mono.size()) ? static_cast<double>(mono[idx]) : 0.0;
+                    in[i] = s * window[i];
+                }
+                fftw_execute(plan);
+
+                // Power spectrum
+                std::vector<double> P(numBins, 0.0);
+                for (size_t k = 0; k < numBins; ++k) {
+                    double re = out[k][0];
+                    double im = out[k][1];
+                    P[k] = re * re + im * im;
+                }
+                // Aggregate low/mid/high
+                double eLow = 0.0, eMid = 0.0, eHigh = 0.0;
+                for (size_t k = 0; k < numBins; ++k) {
+                    int b = binToSimpleBand[k];
+                    if (b == 0) eLow += P[k];
+                    else if (b == 1) eMid += P[k];
+                    else if (b == 2) eHigh += P[k];
+                }
+                timelineBands["low"].push_back(static_cast<float>(eLow));
+                timelineBands["mid"].push_back(static_cast<float>(eMid));
+                timelineBands["high"].push_back(static_cast<float>(eHigh));
+            }
+
+            timelineObj = {
+                {"resolutionHz", std::max(1, m_timelineResolutionHz)},
+                {"bands", timelineBands}
+            };
+        }
+
         // Cleanup
         fftw_destroy_plan(plan);
         fftw_free(in);
@@ -307,6 +374,9 @@ public:
             {"hopSize", H},
             {"frameRate", frameRate}
         };
+        if (m_extendedMode) {
+            result["spectralTimeline"] = timelineObj;
+        }
         return result;
     }
 
@@ -319,6 +389,10 @@ private:
     size_t m_hopSize = 512;
     std::string m_windowType = "hann";
     nlohmann::json m_bandDefs = nlohmann::json::object();
+
+    // Extended spectral timeline parameters
+    bool m_extendedMode = false;
+    int m_timelineResolutionHz = 100; // points per second
 
     // Spectral contrast parameters (tunable)
     int m_contrastNumBands = 6;       // number of octave-like bands starting at m_contrastMinFreq
