@@ -5,6 +5,9 @@
 #include <string>
 #include <cmath>
 #include <algorithm>
+#include <map>
+#include <limits>
+#include <cctype>
 
 namespace ave::modules {
 
@@ -139,6 +142,7 @@ private:
         double onsetDensity = 0.0;
         // Spectral/timbral
         double lowEnergy = 0.0, midEnergy = 0.0, highEnergy = 0.0;
+        double bassEnergy = 0.0; // combined low/sub energy for dynamic bands
         double spectralCentroidMean = 0.0, spectralCentroidStdDev = 0.0;
         // Harmonic
         double keyClarity = 0.0;
@@ -196,35 +200,79 @@ private:
             // Calculate spectral energy (band averages)
             auto energies = calculateSpectralEnergies(spectralResult, start, end);
 
-            // Spectral centroid per frame based on available bands (low/mid/high)
+            // Dynamic spectral centroid using all available bands
             double centroidSum = 0.0, centroidSqSum = 0.0; int centroidCount = 0;
             if (spectralResult && spectralResult->contains("bands")) {
                 const auto& bands = (*spectralResult)["bands"];
-                const auto& lowBand = bands.contains("low") ? bands["low"] : nlohmann::json::array();
-                const auto& midBand = bands.contains("mid") ? bands["mid"] : nlohmann::json::array();
-                const auto& highBand = bands.contains("high") ? bands["high"] : nlohmann::json::array();
-                size_t N = std::min({lowBand.size(), midBand.size(), highBand.size()});
-                for (size_t i = 0; i < N; ++i) {
-                    double t = 0.0;
-                    double el = 0.0, em = 0.0, eh = 0.0;
-                    if (lowBand[i].contains("t")) t = lowBand[i]["t"].get<double>();
-                    if (t < start || t > end) continue;
-                    if (lowBand[i].contains("v")) el = lowBand[i]["v"].get<double>();
-                    if (midBand[i].contains("v")) em = midBand[i]["v"].get<double>();
-                    if (highBand[i].contains("v")) eh = highBand[i]["v"].get<double>();
-                    double sumE = el + em + eh;
-                    if (sumE <= 0.0) continue;
-                    double centroid = (el * fLow + em * fMid + eh * fHigh) / sumE;
-                    centroidSum += centroid;
-                    centroidSqSum += centroid * centroid;
-                    centroidCount++;
+                if (bands.is_object() && !bands.empty()) {
+                    // Collect band names and define approximate center frequencies by name
+                    std::vector<std::string> bandNames; bandNames.reserve(bands.size());
+                    for (auto it = bands.begin(); it != bands.end(); ++it) {
+                        if (it.value().is_array()) bandNames.push_back(it.key());
+                    }
+                    // Build center frequency lookup
+                    auto toLower = [](std::string s){ std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); }); return s; };
+                    std::map<std::string,double> nameCenter = {
+                        {"sub",60.0}, {"low",150.0}, {"lowmid",400.0}, {"low_mid",400.0},
+                        {"mid",1000.0}, {"highmid",3000.0}, {"high_mid",3000.0}, {"high",8000.0}, {"air",12000.0}
+                    };
+                    std::vector<double> centers; centers.reserve(bandNames.size());
+                    const double fLoDefault = 80.0, fHiDefault = 15000.0;
+                    for (size_t bi = 0; bi < bandNames.size(); ++bi) {
+                        std::string ln = toLower(bandNames[bi]);
+                        auto itc = nameCenter.find(ln);
+                        if (itc != nameCenter.end()) centers.push_back(itc->second);
+                        else centers.push_back(fLoDefault + (fHiDefault - fLoDefault) * ((static_cast<double>(bi)+0.5) / static_cast<double>(std::max<size_t>(1, bandNames.size()))));
+                    }
+                    // Determine consistent frame count (min across bands)
+                    size_t N = std::numeric_limits<size_t>::max();
+                    for (const auto& nm : bandNames) { N = std::min(N, bands[nm].size()); }
+                    if (N == std::numeric_limits<size_t>::max()) N = 0;
+                    if (N > 0) {
+                        // Use first band as reference for timestamps
+                        const auto& ref = bands[bandNames.front()];
+                        for (size_t i = 0; i < N; ++i) {
+                            if (!ref[i].contains("t")) continue;
+                            double t = ref[i]["t"].get<double>();
+                            if (t < start || t > end) continue;
+                            double sumE = 0.0, sumEf = 0.0;
+                            for (size_t bi = 0; bi < bandNames.size(); ++bi) {
+                                const auto& fr = bands[bandNames[bi]][i];
+                                if (!fr.contains("v")) continue;
+                                double e = fr["v"].get<double>();
+                                sumE += e; sumEf += e * centers[bi];
+                            }
+                            if (sumE > 0.0) {
+                                double c = sumEf / sumE;
+                                centroidSum += c; centroidSqSum += c * c; ++centroidCount;
+                            }
+                        }
+                    }
                 }
             }
             double centroidMean = (centroidCount ? centroidSum / centroidCount : 0.0);
             double centroidVar = (centroidCount ? (centroidSqSum / centroidCount - centroidMean * centroidMean) : 0.0);
             if (centroidVar < 0.0) centroidVar = 0.0;
             double centroidStd = std::sqrt(centroidVar);
-            
+
+            // Compute overall energy as mean across all bands
+            double overallEnergy = 0.0; {
+                double s = 0.0; size_t c = 0; for (const auto& kv : energies) { s += kv.second; ++c; }
+                overallEnergy = (c ? (s / static_cast<double>(c)) : 0.0);
+            }
+
+            // Derive classic band values for backward-compatibility and bassEnergy
+            double lowEnergy = 0.0, midEnergy = 0.0, highEnergy = 0.0, bassEnergy = 0.0;
+            if (energies.count("low")) lowEnergy = energies["low"];
+            if (energies.count("mid")) midEnergy = energies["mid"];
+            if (energies.count("high")) highEnergy = energies["high"];
+            if (energies.count("sub")) bassEnergy += energies["sub"];
+            if (energies.count("low")) bassEnergy += energies["low"];
+            if (bassEnergy <= 0.0 && !energies.empty()) {
+                // Fallback: take the smallest-index band as bass proxy
+                bassEnergy = energies.begin()->second;
+            }
+
             // Timbral variance from MFCCs within segment
             double timbralVar = 0.0;
             if (spectralResult && spectralResult->contains("mfcc")) {
@@ -288,13 +336,14 @@ private:
             SegmentFeatures fts;
             fts.duration = duration;
             fts.onsetDensity = onsetDensity;
-            fts.lowEnergy = energies.low;
-            fts.midEnergy = energies.mid;
-            fts.highEnergy = energies.high;
+            fts.lowEnergy = lowEnergy;
+            fts.midEnergy = midEnergy;
+            fts.highEnergy = highEnergy;
+            fts.bassEnergy = bassEnergy;
             fts.spectralCentroidMean = centroidMean;
             fts.spectralCentroidStdDev = centroidStd;
             fts.keyClarity = keyClarityTrack;
-            fts.overallEnergy = overallEnergyFromBands(fts.lowEnergy, fts.midEnergy, fts.highEnergy);
+            fts.overallEnergy = overallEnergy;
             fts.timbralStability = timbralVar; // temporary store raw variance; normalized later
             fts.rhythmStability = rhythmVar;   // temporary store raw coefficient; normalized later
             fts.relativePosition = relativePosition;
@@ -305,6 +354,13 @@ private:
             enriched["lowEnergy"] = fts.lowEnergy;
             enriched["midEnergy"] = fts.midEnergy;
             enriched["highEnergy"] = fts.highEnergy;
+            enriched["bassEnergy"] = fts.bassEnergy;
+            // Also expose per-band energies for transparency
+            {
+                nlohmann::json bandE = nlohmann::json::object();
+                for (const auto& kv : energies) bandE[kv.first] = kv.second;
+                enriched["bandEnergies"] = bandE;
+            }
             enriched["spectralCentroidMean"] = fts.spectralCentroidMean;
             enriched["spectralCentroidStdDev"] = fts.spectralCentroidStdDev;
             enriched["keyClarity"] = fts.keyClarity;
@@ -327,7 +383,7 @@ private:
         struct Range { double minv=1e9, maxv=-1e9; void add(double x){ if(x<minv)minv=x; if(x>maxv)maxv=x; } double norm(double x) const { if(maxv<=minv) return 0.0; double y=(x-minv)/(maxv-minv); if(y<0.0) y=0.0; if(y>1.0) y=1.0; return y; } };
         std::vector<SegmentFeatures> feats;
         feats.reserve(enrichedSegments.size());
-        Range rOnset, rLow, rMid, rHigh, rOverall, rDur, rCentroid, rTimbralVar, rRhythmVar;
+        Range rOnset, rLow, rMid, rHigh, rBass, rOverall, rDur, rCentroid, rTimbralVar, rRhythmVar;
         for (const auto& seg : enrichedSegments) {
             SegmentFeatures f{};
             f.duration = seg.value("duration", 0.0);
@@ -335,6 +391,7 @@ private:
             f.lowEnergy = seg.value("lowEnergy", 0.0);
             f.midEnergy = seg.value("midEnergy", 0.0);
             f.highEnergy = seg.value("highEnergy", 0.0);
+            f.bassEnergy = seg.value("bassEnergy", f.lowEnergy);
             f.spectralCentroidMean = seg.value("spectralCentroidMean", 0.0);
             f.spectralCentroidStdDev = seg.value("spectralCentroidStdDev", 0.0);
             f.keyClarity = seg.value("keyClarity", 0.0);
@@ -344,7 +401,7 @@ private:
             f.rhythmStability = seg.value("rhythmVar", 0.0);
             f.relativePosition = seg.value("relativePosition", 0.0);
             feats.push_back(f);
-            rOnset.add(f.onsetDensity); rLow.add(f.lowEnergy); rMid.add(f.midEnergy); rHigh.add(f.highEnergy); rOverall.add(f.overallEnergy); rDur.add(f.duration); rCentroid.add(f.spectralCentroidMean); rTimbralVar.add(f.timbralStability); rRhythmVar.add(f.rhythmStability);
+            rOnset.add(f.onsetDensity); rLow.add(f.lowEnergy); rMid.add(f.midEnergy); rHigh.add(f.highEnergy); rBass.add(f.bassEnergy); rOverall.add(f.overallEnergy); rDur.add(f.duration); rCentroid.add(f.spectralCentroidMean); rTimbralVar.add(f.timbralStability); rRhythmVar.add(f.rhythmStability);
         }
 
         // Convert raw variance to stability [0..1]
@@ -364,14 +421,15 @@ private:
             return 0.4*onset + 0.4*energy + 0.2*dur + bonus;
         };
         auto calculateDropScore = [&](const SegmentFeatures& cur, const SegmentFeatures* prev){
-            double low = rLow.norm(cur.lowEnergy);      // strong bass
+            // Use combined bass energy (sub + low) when available
+            double bass = rBass.norm(cur.bassEnergy);
             double onset = rOnset.norm(cur.onsetDensity); // active
             double inc = 0.0;
             if (prev) {
                 double d = rOverall.norm(cur.overallEnergy) - rOverall.norm(prev->overallEnergy);
                 inc = std::clamp(d, 0.0, 1.0);
             }
-            return 0.4*low + 0.2*onset + 0.4*inc;
+            return 0.4*bass + 0.2*onset + 0.4*inc;
         };
         auto calculateBreakdownScore = [&](const SegmentFeatures& f){
             double low = 1.0 - rLow.norm(f.lowEnergy);
@@ -395,26 +453,26 @@ private:
         auto calculateBuildupScore = [&](const SegmentFeatures& cur, const SegmentFeatures* prev){
             double energyIncrease = 0.0, onsetIncrease = 0.0;
             double lowBuildup = 0.0;
-            double nLowCur = rLow.norm(cur.lowEnergy);
+            double nBassCur = rBass.norm(cur.bassEnergy);
             if (prev) {
                 double nOverallCur = rOverall.norm(cur.overallEnergy);
                 double nOverallPrev = rOverall.norm(prev->overallEnergy);
                 double nOnsetCur = rOnset.norm(cur.onsetDensity);
                 double nOnsetPrev = rOnset.norm(prev->onsetDensity);
-                double nLowPrev = rLow.norm(prev->lowEnergy);
+                double nBassPrev = rBass.norm(prev->bassEnergy);
                 energyIncrease = std::max(0.0, nOverallCur - nOverallPrev);
                 onsetIncrease = std::max(0.0, nOnsetCur - nOnsetPrev);
                 // Favor low-bass reduction or stagnation (kick drop) before the impact
-                double lowDrop = std::max(0.0, nLowPrev - nLowCur); // positive if current low < previous low
-                double lowCut = 1.0 - nLowCur; // absolute bass cut helps too
+                double lowDrop = std::max(0.0, nBassPrev - nBassCur); // positive if current bass < previous bass
+                double lowCut = 1.0 - nBassCur; // absolute bass cut helps too
                 lowBuildup = 0.7 * lowDrop + 0.3 * lowCut;
                 // Penalize cases where bass increases together with onset spike (likely the drop itself)
-                if ((nLowCur > nLowPrev + 0.10) && (onsetIncrease > 0.20)) {
+                if ((nBassCur > nBassPrev + 0.10) && (onsetIncrease > 0.20)) {
                     lowBuildup *= 0.8;
                 }
             } else {
                 // No previous context: rely on absolute low cut only
-                lowBuildup = 1.0 - nLowCur;
+                lowBuildup = 1.0 - nBassCur;
             }
             // Slightly emphasize rhythmic density growth for buildup feeling
             return 0.4*energyIncrease + 0.35*onsetIncrease + 0.25*lowBuildup;
@@ -697,35 +755,24 @@ private:
     }
     
     /**
-     * Helper: Calculate average spectral energies in a time range
+     * Helper: Calculate average spectral energies in a time range (dynamic bands)
+     * Returns a map bandName -> average energy in [start,end].
      */
-    struct SpectralEnergies {
-        double low = 0.0;
-        double mid = 0.0;
-        double high = 0.0;
-    };
-    
-    SpectralEnergies calculateSpectralEnergies(const std::optional<nlohmann::json>& spectralResult,
-                                              double start, double end) {
-        SpectralEnergies energies;
-        
+    std::map<std::string, double> calculateSpectralEnergies(const std::optional<nlohmann::json>& spectralResult,
+                                                            double start, double end) {
+        std::map<std::string, double> energies;
         if (!spectralResult || !spectralResult->contains("bands")) {
             return energies;
         }
-        
-        auto& bands = (*spectralResult)["bands"];
-        
-        // Average energy for each band in the time range
-        if (bands.contains("low")) {
-            energies.low = calculateBandAverage(bands["low"], start, end);
+        const auto& bands = (*spectralResult)["bands"];
+        if (!bands.is_object()) return energies;
+        for (auto it = bands.begin(); it != bands.end(); ++it) {
+            const std::string bandName = it.key();
+            const auto& arr = it.value();
+            if (!arr.is_array()) continue;
+            double avg = calculateBandAverage(arr, start, end);
+            energies[bandName] = avg;
         }
-        if (bands.contains("mid")) {
-            energies.mid = calculateBandAverage(bands["mid"], start, end);
-        }
-        if (bands.contains("high")) {
-            energies.high = calculateBandAverage(bands["high"], start, end);
-        }
-        
         return energies;
     }
     
