@@ -45,10 +45,17 @@ public:
             };
         }
         
-        // Structure segments - prefer enhanced segments from Cue module
+        // Structure segments - prefer enhanced segments from Cue module ONLY if non-empty; otherwise fall back to Structure
         if (moduleResults.count("Cue") && moduleResults.at("Cue").contains("segments")) {
-            output["structure"] = moduleResults.at("Cue")["segments"];
-        } else if (moduleResults.count("Structure")) {
+            const auto& cueSegs = moduleResults.at("Cue")["segments"];
+            if ((cueSegs.is_array() && !cueSegs.empty()) || (!cueSegs.is_array() && !cueSegs.is_null())) {
+                output["structure"] = cueSegs;
+            } else if (moduleResults.count("Structure") && moduleResults.at("Structure").contains("segments")) {
+                output["structure"] = moduleResults.at("Structure")["segments"];
+            } else {
+                output["structure"] = nlohmann::json::array();
+            }
+        } else if (moduleResults.count("Structure") && moduleResults.at("Structure").contains("segments")) {
             output["structure"] = moduleResults.at("Structure")["segments"];
         }
         

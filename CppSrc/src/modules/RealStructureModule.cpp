@@ -6,6 +6,7 @@
 #include <string>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 
 namespace ave { namespace modules {
 
@@ -60,36 +61,49 @@ public:
         if (!spec.contains("bands")) return makeEmptyResult();
         const auto& bands = spec["bands"];
 
-        // Expected band names
-        static const char* NAMES[5] = {"low", "lowMid", "mid", "highMid", "high"};
-        for (const char* nm : NAMES) {
-            if (!bands.contains(nm)) return makeEmptyResult();
+        // Collect dynamic band names from Spectral output (compatible with configurable bands)
+        std::vector<std::string> dynBandNames;
+        dynBandNames.reserve(bands.size());
+        for (auto it = bands.begin(); it != bands.end(); ++it) {
+            if (it.value().is_array()) {
+                dynBandNames.push_back(it.key());
+            }
+        }
+        if (dynBandNames.empty()) {
+            return makeEmptyResult();
         }
 
-        // Determine number of frames (assume all bands aligned)
-        const size_t numFrames = bands["low"].size();
+        // Determine number of frames: use the minimum length across bands to be safe
+        size_t numFrames = std::numeric_limits<size_t>::max();
+        for (const auto& nm : dynBandNames) {
+            size_t n = bands[nm].size();
+            if (n < numFrames) numFrames = n;
+        }
+        if (numFrames == std::numeric_limits<size_t>::max()) numFrames = 0;
         if (numFrames < static_cast<size_t>(m_kernelSize * 2 + 4)) {
             return makeEmptyResult();
         }
 
-        // Build feature vectors (5D) and L2-normalize per frame
-        std::vector<std::vector<double>> features(numFrames, std::vector<double>(5, 0.0));
+        // Build feature vectors (D = number of bands) and L2-normalize per frame
+        const size_t D = dynBandNames.size();
+        std::vector<std::vector<double>> features(numFrames, std::vector<double>(D, 0.0));
         for (size_t t = 0; t < numFrames; ++t) {
-            double v[5] = {
-                bands["low"][t].contains("v") ? bands["low"][t]["v"].get<double>() : 0.0,
-                bands["lowMid"][t].contains("v") ? bands["lowMid"][t]["v"].get<double>() : 0.0,
-                bands["mid"][t].contains("v") ? bands["mid"][t]["v"].get<double>() : 0.0,
-                bands["highMid"][t].contains("v") ? bands["highMid"][t]["v"].get<double>() : 0.0,
-                bands["high"][t].contains("v") ? bands["high"][t]["v"].get<double>() : 0.0
-            };
-            // L2 normalize
-            double norm2 = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3] + v[4]*v[4]);
-            if (norm2 <= 1e-12) {
-                // leave zeros
-            } else {
-                for (int i = 0; i < 5; ++i) v[i] /= norm2;
+            // gather raw values
+            double norm2 = 0.0;
+            for (size_t d = 0; d < D; ++d) {
+                const auto& nm = dynBandNames[d];
+                double val = 0.0;
+                const auto& arr = bands[nm][t];
+                if (arr.is_object() && arr.contains("v")) {
+                    val = arr["v"].get<double>();
+                }
+                features[t][d] = val;
+                norm2 += val * val;
             }
-            for (int i = 0; i < 5; ++i) features[t][static_cast<size_t>(i)] = v[i];
+            if (norm2 > 1e-12) {
+                double inv = 1.0 / std::sqrt(norm2);
+                for (size_t d = 0; d < D; ++d) features[t][d] *= inv;
+            }
         }
 
         // Helper to build cosine SSM for arbitrary feature matrix (frames x dims)
