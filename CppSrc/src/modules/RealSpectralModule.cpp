@@ -112,11 +112,14 @@ public:
 
         const size_t numBins = N / 2 + 1;
         std::vector<int> binToBand(numBins, -1);
+        std::vector<int> bandBinCounts(bandNames.size(), 0); // Count bins per band for normalization
+
         for (size_t k = 0; k < numBins; ++k) {
             double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
             for (size_t b = 0; b < bandRanges.size(); ++b) {
                 if (fk >= bandRanges[b].first && fk <= bandRanges[b].second) {
                     binToBand[k] = static_cast<int>(b);
+                    bandBinCounts[b]++;
                     break;
                 }
             }
@@ -235,6 +238,13 @@ public:
                 if (b >= 0) bandEnergy[static_cast<size_t>(b)] += P[k];
             }
 
+            // Normalize by bin count (average power per bin in band)
+            for (size_t b = 0; b < bandNames.size(); ++b) {
+                if (bandBinCounts[b] > 0) {
+                    bandEnergy[b] /= static_cast<double>(bandBinCounts[b]);
+                }
+            }
+
             // Compute Mel energies and MFCCs
             std::vector<double> melE(static_cast<size_t>(numMelBands), 0.0);
             for (int m = 0; m < numMelBands; ++m) {
@@ -327,7 +337,10 @@ public:
                     int b = binToBand[k];
                     if (b >= 0) e[static_cast<size_t>(b)] += P[k];
                 }
+
+                // Normalize by bin count
                 for (size_t b = 0; b < bandNames.size(); ++b) {
+                    if (bandBinCounts[b] > 0) e[b] /= static_cast<double>(bandBinCounts[b]);
                     timelineBands[bandNames[b]].push_back(static_cast<float>(e[b]));
                 }
             }

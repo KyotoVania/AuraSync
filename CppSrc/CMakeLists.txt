@@ -30,6 +30,8 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFTW3 REQUIRED fftw3)
     include_directories(${FFTW3_INCLUDE_DIRS})
+    # FIX: Ensure linker knows where to look for the library
+    link_directories(${FFTW3_LIBRARY_DIRS})
     set(FFTW_LIBRARIES ${FFTW3_LIBRARIES})
 endif()
 
