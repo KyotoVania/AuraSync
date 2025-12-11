@@ -7,12 +7,14 @@
 
 namespace ave::pipeline {
 
-AnalysisPipeline::AnalysisPipeline() {
-    m_globalConfig = {
+// FIX: Use member initializer list for better performance (Cppcheck recommendation)
+AnalysisPipeline::AnalysisPipeline()
+    : m_globalConfig({
         {"version", 1},
         {"timestamp", ""},
         {"debug", false}
-    };
+    })
+{
 }
 
 AnalysisPipeline::~AnalysisPipeline() = default;

@@ -272,8 +272,7 @@ public:
         bool hasE = true;
         bool hasM = false; for (double v : noveltyMAPPED_MFCC) { if (v > 0.0) { hasM = true; break; } }
         bool hasC = false; for (double v : noveltyMAPPED_CHROMA) { if (v > 0.0) { hasC = true; break; } }
-        bool hasX = false; for (double v : noveltyMAPPED_CONTRAST) { if (v > 0.0) { hasX = true; break; } }
-        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
+        bool hasX = std::any_of(noveltyMAPPED_CONTRAST.begin(), noveltyMAPPED_CONTRAST.end(), [](double v){ return v > 0.0; });        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
         for (size_t t = 0; t < numFrames; ++t) {
             double s = 0.0;
             if (hasE) s += m_wE * noveltyE[t];
@@ -489,6 +488,7 @@ private:
             std::sort(times.begin(), times.end());
             std::vector<double> tmp;
             const double minGap=0.1;
+            // cppcheck-suppress useStlAlgorithm
             for (double t : times){ if (tmp.empty() || std::abs(t - tmp.back()) >= minGap) tmp.push_back(t);}
             times.swap(tmp);
         };

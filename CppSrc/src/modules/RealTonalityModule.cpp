@@ -216,8 +216,8 @@ public:
             std::vector<double> window(winF.begin(), winF.end());
 
             size_t numFramesSeq = (mono.size() + Hseq - 1) / Hseq;
-            double* inS = (double*)fftw_malloc(sizeof(double) * Nseq);
-            fftw_complex* outS = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (Nseq / 2 + 1));
+            double* inS = static_cast<double*>(fftw_malloc(sizeof(double) * Nseq));
+            fftw_complex* outS = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (Nseq / 2 + 1)));
             fftw_plan planS = fftw_plan_dft_r2c_1d(static_cast<int>(Nseq), inS, outS, FFTW_ESTIMATE);
             const size_t numBinsS = Nseq / 2 + 1;
 
@@ -244,8 +244,10 @@ public:
                     cv[static_cast<size_t>(cb)] += power;
                 }
                 double ssum = 0.0; for (double v : cv) ssum += v;
-                if (ssum > 0.0) { for (double& v : cv) v /= ssum; }
-                double t = static_cast<double>(f) / frameRate;
+                double ssum = std::accumulate(cv.begin(), cv.end(), 0.0);
+                if (ssum > 0.0) {
+                    std::transform(cv.begin(), cv.end(), cv.begin(), [ssum](double v) { return v / ssum; });
+                }
                 nlohmann::json vj = nlohmann::json::array();
                 for (double x : cv) vj.push_back(x);
                 chromaSeq.push_back({{"t", t}, {"v", vj}});
@@ -289,7 +291,7 @@ private:
     static int mapQMKeyToIndex24(int qmKey) {
         // QM: 0=no key, 1=C major..12=B major, 13=C minor..24=B minor
         if (qmKey <= 0) return -1;
-        if (qmKey >= 1 && qmKey <= 24) return qmKey - 1; // 0..23
+        if (qmKey <= 24) return qmKey - 1;
         return -1;
     }
 
@@ -331,8 +333,8 @@ private:
         if (numFrames == 0) return std::vector<double>(12, 0.0);
 
         // FFTW setup
-        double* in = (double*)fftw_malloc(sizeof(double) * N);
-        fftw_complex* out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1));
+        double* inS = static_cast<double*>(fftw_malloc(sizeof(double) * Nseq));
+        fftw_complex* outS = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (Nseq / 2 + 1)));
         if (!in || !out) {
             if (in) fftw_free(in);
             if (out) fftw_free(out);

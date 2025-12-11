@@ -95,7 +95,9 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
     auto decodeFloat32 = [&](void) {
         for (size_t i = 0; i < frames; ++i) {
             for (size_t ch = 0; ch < numChannels; ++ch) {
-                float s; f.read(reinterpret_cast<char*>(&s), 4);
+                float s;
+                // cppcheck-suppress invalidPointerCast
+                f.read(reinterpret_cast<char*>(&s), 4);
                 buffer.getChannel(ch)[i] = s;
             }
         }
@@ -116,4 +118,3 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
 }
 
 } // namespace ave::pipeline
-
