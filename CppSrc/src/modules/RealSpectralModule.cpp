@@ -15,14 +15,17 @@ namespace modules {
 class RealSpectralModule : public core::IAnalysisModule {
 public:
     std::string getName() const override { return "Spectral"; }
-    std::string getVersion() const override { return "1.0.0"; }
+    std::string getVersion() const override { return "1.0.2"; }
     bool isRealTime() const override { return true; }
 
     bool initialize(const nlohmann::json& config) override {
+        // FFT Parameters
         if (config.contains("fftSize")) m_fftSize = std::max<size_t>(32, config["fftSize"].get<size_t>());
         if (config.contains("hopSize")) m_hopSize = std::max<size_t>(1, config["hopSize"].get<size_t>());
         if (m_hopSize > m_fftSize) m_hopSize = m_fftSize / 2; // clamp
         if (config.contains("windowType")) m_windowType = config["windowType"].get<std::string>();
+
+        // Band Definitions
         if (config.contains("bandDefinitions")) {
             m_bandDefs = config["bandDefinitions"];
         } else {
@@ -33,15 +36,17 @@ public:
                 {"high", {4000.0, 20000.0}}
             };
         }
-        // Spectral contrast params (tunable)
+
+        // Spectral Contrast Parameters
         if (config.contains("contrastNumBands")) m_contrastNumBands = std::max<int>(1, config["contrastNumBands"].get<int>());
         if (config.contains("contrastMinFreq")) m_contrastMinFreq = std::max(1.0, config["contrastMinFreq"].get<double>());
         if (config.contains("contrastTopPercent")) m_contrastTopPercent = std::clamp(config["contrastTopPercent"].get<double>(), 0.01, 0.9);
         if (config.contains("contrastBottomPercent")) m_contrastBottomPercent = std::clamp(config["contrastBottomPercent"].get<double>(), 0.01, 0.9);
 
-        // Extended spectral timeline mode
+        // Extended Spectral Timeline Mode
         if (config.contains("extendedMode")) m_extendedMode = config["extendedMode"].get<bool>();
         if (config.contains("timelineResolutionHz")) m_timelineResolutionHz = std::max<int>(1, config["timelineResolutionHz"].get<int>());
+
         return true;
     }
 
@@ -53,17 +58,14 @@ public:
         const float sampleRate = audio.getSampleRate();
         const size_t N = m_fftSize;
         const size_t H = m_hopSize == 0 ? std::max<size_t>(1, N / 4) : m_hopSize;
-        if (N < 32) {
-            return makeEmptyResult(sampleRate, N, H);
-        }
+
+        if (N < 32) return makeEmptyResult(sampleRate, N, H);
 
         // Prepare mono signal
         std::vector<float> mono = audio.getMono();
-        if (mono.empty()) {
-            return makeEmptyResult(sampleRate, N, H);
-        }
+        if (mono.empty()) return makeEmptyResult(sampleRate, N, H);
 
-        // Precompute window
+        // Precompute window function
         std::vector<float> winF;
         if (m_windowType == "hann" || m_windowType.empty()) {
             winF = core::window::hann(N);
@@ -77,16 +79,18 @@ public:
         std::vector<double> window(winF.begin(), winF.end());
 
         // Determine number of frames with zero-padding for last partial frame
-        const size_t numFrames = (mono.size() + H - 1) / H; // process until start < mono.size()
+        const size_t numFrames = (mono.size() + H - 1) / H;
 
         // FFTW setup (plan once, execute per frame)
         double* in = static_cast<double*>(fftw_malloc(sizeof(double) * N));
         if (!in) return makeEmptyResult(sampleRate, N, H);
+
         fftw_complex* out = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1)));
         if (!out) {
             fftw_free(in);
             return makeEmptyResult(sampleRate, N, H);
         }
+
         fftw_plan plan = fftw_plan_dft_r2c_1d(static_cast<int>(N), in, out, FFTW_ESTIMATE);
 
         // Prepare band names and bin mapping
@@ -95,6 +99,7 @@ public:
         bandNames.reserve(m_bandDefs.size());
         bandRanges.reserve(m_bandDefs.size());
         const double nyquist = sampleRate / 2.0;
+
         for (auto it = m_bandDefs.begin(); it != m_bandDefs.end(); ++it) {
             const std::string name = it.key();
             const auto arr = it.value();
@@ -112,9 +117,11 @@ public:
 
         const size_t numBins = N / 2 + 1;
         std::vector<int> binToBand(numBins, -1);
-        std::vector<int> bandBinCounts(bandNames.size(), 0); // Count bins per band for normalization
+        std::vector<int> bandBinCounts(bandNames.size(), 0);
 
-        for (size_t k = 0; k < numBins; ++k) {
+        // Map bins to bands
+        // FIX: Start at k=1 to exclude DC (0Hz) from band mapping to fix White Noise ratio test
+        for (size_t k = 1; k < numBins; ++k) {
             double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
             for (size_t b = 0; b < bandRanges.size(); ++b) {
                 if (fk >= bandRanges[b].first && fk <= bandRanges[b].second) {
@@ -125,7 +132,7 @@ public:
             }
         }
 
-        // Prepare octave-like bands for Spectral Contrast (log-spaced, doubling bandwidth)
+        // Prepare octave-like bands for Spectral Contrast (log-spaced)
         std::vector<std::pair<double,double>> contrastBandEdges;
         {
             double flo = std::max(1.0, m_contrastMinFreq);
@@ -139,9 +146,10 @@ public:
                 contrastBandEdges.emplace_back(60.0, nyquist);
             }
         }
+
         // Map FFT bins to contrast bands
         std::vector<std::vector<size_t>> contrastBandBins(contrastBandEdges.size());
-        for (size_t k = 0; k < numBins; ++k) {
+        for (size_t k = 1; k < numBins; ++k) { // Also skip DC here
             double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
             for (size_t b = 0; b < contrastBandEdges.size(); ++b) {
                 const auto& be = contrastBandEdges[b];
@@ -158,15 +166,18 @@ public:
         const int numCoeffs = 13;
         const double fmin = 20.0;
         const double fmax = nyquist;
+
         auto hzToMel = [](double f) { return 2595.0 * std::log10(1.0 + f / 700.0); };
         auto melToHz = [](double m) { return 700.0 * (std::pow(10.0, m / 2595.0) - 1.0); };
-        // Mel points
+
         std::vector<double> melPoints(numMelBands + 2);
         double melMin = hzToMel(fmin);
         double melMax = hzToMel(fmax);
+
         for (int i = 0; i < numMelBands + 2; ++i) {
             melPoints[static_cast<size_t>(i)] = melMin + (melMax - melMin) * (static_cast<double>(i) / static_cast<double>(numMelBands + 1));
         }
+
         // Convert mel points to FFT bin indices
         std::vector<size_t> binPoints(numMelBands + 2);
         for (int i = 0; i < numMelBands + 2; ++i) {
@@ -175,7 +186,8 @@ public:
             if (bin >= numBins) bin = numBins - 1;
             binPoints[static_cast<size_t>(i)] = bin;
         }
-        // Build triangular mel filterbank weights W[numMelBands][numBins]
+
+        // Build triangular mel filterbank weights
         std::vector<std::vector<double>> melW(static_cast<size_t>(numMelBands), std::vector<double>(numBins, 0.0));
         for (int m = 0; m < numMelBands; ++m) {
             size_t a = binPoints[static_cast<size_t>(m)];
@@ -183,6 +195,7 @@ public:
             size_t c = binPoints[static_cast<size_t>(m + 2)];
             if (a == b) { if (b > 0) --a; }
             if (b == c) { if (c + 1 < numBins) ++c; }
+
             for (size_t k = a; k < b; ++k) {
                 double w = (b == a) ? 0.0 : (static_cast<double>(k) - static_cast<double>(a)) / (static_cast<double>(b) - static_cast<double>(a));
                 melW[static_cast<size_t>(m)][k] = std::max(0.0, std::min(1.0, w));
@@ -192,7 +205,8 @@ public:
                 melW[static_cast<size_t>(m)][k] = std::max(0.0, std::min(1.0, w));
             }
         }
-        // Precompute DCT-II matrix [numCoeffs x numMelBands]
+
+        // Precompute DCT-II matrix
         std::vector<std::vector<double>> dct(static_cast<size_t>(numCoeffs), std::vector<double>(static_cast<size_t>(numMelBands), 0.0));
         const double scale0 = std::sqrt(1.0 / static_cast<double>(numMelBands));
         const double scale = std::sqrt(2.0 / static_cast<double>(numMelBands));
@@ -203,17 +217,16 @@ public:
             }
         }
 
-        // Output structure
+        // Output containers
         nlohmann::json bands = nlohmann::json::object();
         for (const auto& name : bandNames) bands[name] = nlohmann::json::array();
         nlohmann::json mfcc = nlohmann::json::array();
-        // Spectral contrast output: array of {t, v:[...]} with octave-band contrasts
         nlohmann::json spectralContrast = nlohmann::json::array();
 
-        // STFT loop
+        // ---------------- STFT Processing Loop ----------------
         for (size_t f = 0; f < numFrames; ++f) {
             const size_t start = f * H;
-            // Fill input with windowed samples or zeros beyond length
+            // Fill input with windowed samples
             for (size_t i = 0; i < N; ++i) {
                 size_t idx = start + i;
                 double s = (idx < mono.size()) ? static_cast<double>(mono[idx]) : 0.0;
@@ -223,38 +236,35 @@ public:
             // Execute FFT
             fftw_execute(plan);
 
-            // Compute power spectrum vector P
+            // Compute power spectrum
             std::vector<double> P(numBins, 0.0);
             for (size_t k = 0; k < numBins; ++k) {
                 double re = out[k][0];
                 double im = out[k][1];
-                P[k] = re * re + im * im; // power spectrum
+                P[k] = re * re + im * im;
             }
 
-            // Aggregate power per band (5-band energies)
+            // --- 1. Band Energies ---
             std::vector<double> bandEnergy(bandNames.size(), 0.0);
-            for (size_t k = 0; k < numBins; ++k) {
+            // FIX: Loop from k=1 to exclude DC from energy sum
+            for (size_t k = 1; k < numBins; ++k) {
                 int b = binToBand[k];
                 if (b >= 0) bandEnergy[static_cast<size_t>(b)] += P[k];
             }
-
-            // Normalize by bin count (average power per bin in band)
+            // Normalize by bin count (density) to fix White Noise test
             for (size_t b = 0; b < bandNames.size(); ++b) {
                 if (bandBinCounts[b] > 0) {
                     bandEnergy[b] /= static_cast<double>(bandBinCounts[b]);
                 }
             }
 
-            // Compute Mel energies and MFCCs
+            // --- 2. MFCCs ---
             std::vector<double> melE(static_cast<size_t>(numMelBands), 0.0);
             for (int m = 0; m < numMelBands; ++m) {
                 double s = 0.0;
                 for (size_t k = 0; k < numBins; ++k) s += P[k] * melW[static_cast<size_t>(m)][k];
-                melE[static_cast<size_t>(m)] = s;
+                melE[static_cast<size_t>(m)] = std::log(std::max(1e-12, s));
             }
-            // log-energy
-            for (double& v : melE) v = std::log(std::max(1e-12, v));
-            // DCT-II to MFCCs
             std::vector<double> mfccVec(static_cast<size_t>(numCoeffs), 0.0);
             for (int c = 0; c < numCoeffs; ++c) {
                 double acc = 0.0;
@@ -262,7 +272,7 @@ public:
                 mfccVec[static_cast<size_t>(c)] = acc;
             }
 
-            // Spectral Contrast per octave band: difference (dB) between top and bottom energy quantiles within band
+            // --- 3. Spectral Contrast ---
             std::vector<double> contrastVec(contrastBandBins.size(), 0.0);
             const double eps = 1e-12;
             for (size_t b = 0; b < contrastBandBins.size(); ++b) {
@@ -274,49 +284,49 @@ public:
                 size_t n = values.size();
                 size_t nTop = static_cast<size_t>(std::max(1.0, std::floor(m_contrastTopPercent * static_cast<double>(n))));
                 size_t nBot = static_cast<size_t>(std::max(1.0, std::floor(m_contrastBottomPercent * static_cast<double>(n))));
-                // Mean of top nTop
-                double sumTop = 0.0; for (size_t i = n - nTop; i < n; ++i) sumTop += values[i]; double meanTop = sumTop / static_cast<double>(nTop);
-                // Mean of bottom nBot
-                double sumBot = 0.0; for (size_t i = 0; i < nBot; ++i) sumBot += values[i]; double meanBot = sumBot / static_cast<double>(nBot);
+
+                double sumTop = 0.0;
+                for (size_t i = n - nTop; i < n; ++i) sumTop += values[i];
+                double meanTop = sumTop / static_cast<double>(nTop);
+
+                double sumBot = 0.0;
+                for (size_t i = 0; i < nBot; ++i) sumBot += values[i];
+                double meanBot = sumBot / static_cast<double>(nBot);
+
                 double ratio = (meanBot > 0.0 ? (meanTop / meanBot) : (meanTop / eps));
-                contrastVec[b] = 10.0 * std::log10(std::max(ratio, 1e-12));
+                contrastVec[b] = 10.0 * std::log10(std::max(ratio, eps));
             }
 
-            // Timestamp (frame start in seconds as per spec)
+            // Append to output
             double t = static_cast<double>(f) * static_cast<double>(H) / static_cast<double>(sampleRate);
 
-            // Append to output arrays
             for (size_t b = 0; b < bandNames.size(); ++b) {
                 bands[bandNames[b]].push_back({ {"t", t}, {"v", static_cast<float>(bandEnergy[b])} });
             }
-            // Append MFCCs
+
             nlohmann::json coeffs = nlohmann::json::array();
             for (double c : mfccVec) coeffs.push_back(static_cast<float>(c));
             mfcc.push_back({ {"t", t}, {"v", coeffs} });
-            // Append spectral contrast
+
             nlohmann::json cvec = nlohmann::json::array();
             for (double cv : contrastVec) cvec.push_back(static_cast<float>(cv));
             spectralContrast.push_back({ {"t", t}, {"v", cvec} });
         }
 
-        // Optional extended spectral timeline pass
+        // ---------------- Optional Extended Timeline ----------------
         nlohmann::json timelineObj;
         if (m_extendedMode) {
-            // Timeline hop based on requested resolution
             const double desiredRes = static_cast<double>(std::max(1, m_timelineResolutionHz));
             const size_t hopT = std::max<size_t>(1, static_cast<size_t>(std::floor(static_cast<double>(sampleRate) / desiredRes)));
             const size_t numFramesT = (mono.size() + hopT - 1) / hopT;
 
-            // Prepare dynamic bands container based on configured bandDefinitions
             nlohmann::json timelineBands = nlohmann::json::object();
             for (const auto& name : bandNames) {
                 timelineBands[name] = nlohmann::json::array();
             }
 
-            // Process at timeline resolution using the same FFT size and window
             for (size_t f = 0; f < numFramesT; ++f) {
                 const size_t start = f * hopT;
-                // Fill FFT input for this timeline frame
                 for (size_t i = 0; i < N; ++i) {
                     size_t idx = start + i;
                     double s = (idx < mono.size()) ? static_cast<double>(mono[idx]) : 0.0;
@@ -324,21 +334,17 @@ public:
                 }
                 fftw_execute(plan);
 
-                // Power spectrum
                 std::vector<double> P(numBins, 0.0);
                 for (size_t k = 0; k < numBins; ++k) {
-                    double re = out[k][0];
-                    double im = out[k][1];
-                    P[k] = re * re + im * im;
+                    P[k] = out[k][0]*out[k][0] + out[k][1]*out[k][1];
                 }
-                // Aggregate dynamically per configured band
+
                 std::vector<double> e(bandNames.size(), 0.0);
-                for (size_t k = 0; k < numBins; ++k) {
+                // FIX: Ignore DC bin here too
+                for (size_t k = 1; k < numBins; ++k) {
                     int b = binToBand[k];
                     if (b >= 0) e[static_cast<size_t>(b)] += P[k];
                 }
-
-                // Normalize by bin count
                 for (size_t b = 0; b < bandNames.size(); ++b) {
                     if (bandBinCounts[b] > 0) e[b] /= static_cast<double>(bandBinCounts[b]);
                     timelineBands[bandNames[b]].push_back(static_cast<float>(e[b]));
@@ -357,7 +363,7 @@ public:
         fftw_free(out);
 
         const double frameRate = static_cast<double>(sampleRate) / static_cast<double>(H);
-        // Pack contrast band edges for reference/consumers
+
         nlohmann::json contrastBandsMeta = nlohmann::json::array();
         for (const auto& be : contrastBandEdges) contrastBandsMeta.push_back({be.first, be.second});
 
@@ -371,6 +377,7 @@ public:
             {"hopSize", H},
             {"frameRate", frameRate}
         };
+
         if (m_extendedMode) {
             result["spectralTimeline"] = timelineObj;
         }
@@ -391,11 +398,11 @@ private:
     bool m_extendedMode = false;
     int m_timelineResolutionHz = 100; // points per second
 
-    // Spectral contrast parameters (tunable)
-    int m_contrastNumBands = 6;       // number of octave-like bands starting at m_contrastMinFreq
-    double m_contrastMinFreq = 60.0;  // Hz, start of first band
-    double m_contrastTopPercent = 0.2;    // fraction of top energies used as peaks
-    double m_contrastBottomPercent = 0.2; // fraction of bottom energies used as valleys
+    // Spectral contrast parameters
+    int m_contrastNumBands = 6;
+    double m_contrastMinFreq = 60.0;
+    double m_contrastTopPercent = 0.2;
+    double m_contrastBottomPercent = 0.2;
 
     static nlohmann::json makeEmptyResult(float sampleRate, size_t N, size_t H) {
         if (H == 0) H = std::max<size_t>(1, N / 4);

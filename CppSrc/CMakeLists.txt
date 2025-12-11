@@ -4,13 +4,9 @@ project(AudioVisualEngineAnalysis VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# --- Dependencies ---
-
-# nlohmann/json (FetchContent is great, works everywhere)
 include(FetchContent)
 FetchContent_Declare(
         json
@@ -19,25 +15,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# FFTW3 Configuration (Cross-Platform Fix)
 if(WIN32)
-    # Windows: Keep your existing logic
     set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/fftw-3.3.5-dll64)
     include_directories(${FFTW3_DIR})
     set(FFTW_LIBRARIES ${FFTW3_DIR}/libfftw3-3.lib)
 else()
-    # Linux/macOS: Use system package manager (apt/brew)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFTW3 REQUIRED fftw3)
     include_directories(${FFTW3_INCLUDE_DIRS})
-    # FIX: Ensure linker knows where to look for the library
-    link_directories(${FFTW3_LIBRARY_DIRS})
+    link_directories(${FFTW3_LIBRARY_DIRS}) # FIX: Added for Mac/Linux linking
     set(FFTW_LIBRARIES ${FFTW3_LIBRARIES})
 endif()
 
-# --- Library ---
-
-# Core library
 add_library(ave_core STATIC
         src/core/AudioBuffer.cpp
         src/core/JsonContract.cpp
@@ -58,7 +47,6 @@ target_include_directories(ave_core
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
 )
 
-# --- QM-DSP minimal static library ---
 add_library(ave_qmdsp STATIC
         lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
         lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp
@@ -90,7 +78,6 @@ if (MSVC)
 endif()
 target_compile_definitions(ave_qmdsp PUBLIC KISS_FFT_USE_DOUBLE kiss_fft_scalar=double)
 
-# Link qm-dsp and FFTW into core library
 target_link_libraries(ave_core
         PUBLIC
         nlohmann_json::nlohmann_json
@@ -98,16 +85,9 @@ target_link_libraries(ave_core
         ${FFTW_LIBRARIES}
 )
 
-# --- Main Executable ---
-
 add_executable(ave_analysis src/main.cpp)
+target_link_libraries(ave_analysis PRIVATE ave_core)
 
-target_link_libraries(ave_analysis
-        PRIVATE
-        ave_core
-)
-
-# Copy FFTW DLL only on Windows
 if(WIN32)
     add_custom_command(TARGET ave_analysis POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -116,15 +96,11 @@ if(WIN32)
     )
 endif()
 
-# --- Tests ---
-
 option(BUILD_TESTS "Build tests" ON)
 
 if(BUILD_TESTS)
     enable_testing()
-
     option(AVE_BUILD_ONSET_TESTS "Build granular onset tests" ON)
-
     set(AVE_TEST_SOURCES
             tests/test_main.cpp
             tests/test_modules.cpp
@@ -137,7 +113,6 @@ if(BUILD_TESTS)
             tests/test_structure_constant.cpp
             tests/test_cue_synthesis.cpp
     )
-
     if(AVE_BUILD_ONSET_TESTS)
         list(APPEND AVE_TEST_SOURCES
                 tests/test_onset_click.cpp
@@ -150,10 +125,8 @@ if(BUILD_TESTS)
     endif()
 
     add_executable(ave_tests ${AVE_TEST_SOURCES})
-
     target_link_libraries(ave_tests PRIVATE ave_core)
 
-    # Copy test assets if they exist
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/assets")
         add_custom_command(TARGET ave_tests POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -162,7 +135,6 @@ if(BUILD_TESTS)
         )
     endif()
 
-    # Copy FFTW DLL only on Windows
     if(WIN32)
         add_custom_command(TARGET ave_tests POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -174,7 +146,6 @@ if(BUILD_TESTS)
     add_test(NAME ave_tests COMMAND ave_tests)
 endif()
 
-# --- Installation ---
 install(TARGETS ave_analysis ave_core
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib

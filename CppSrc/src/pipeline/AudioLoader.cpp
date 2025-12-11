@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include <cstring> // Added for std::memcpy
+#include <cstring> // Required for std::memcpy
 
 namespace ave::pipeline {
 
@@ -19,16 +19,12 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
     // RIFF header
     char riff[4]; f.read(riff, 4);
     if (f.gcount() != 4 || std::string(riff, 4) != "RIFF") throw std::runtime_error("Not a RIFF file");
-    (void)read_u32_le(f); // file size
+    (void)read_u32_le(f);
     char wave[4]; f.read(wave, 4);
     if (f.gcount() != 4 || std::string(wave, 4) != "WAVE") throw std::runtime_error("Not a WAVE file");
 
-    // Parse chunks
-    uint16_t audioFormat = 0; // 1=PCM, 3=IEEE float
-    uint16_t numChannels = 0;
-    uint32_t sampleRate = 0;
-    uint16_t bitsPerSample = 0;
-    uint32_t dataSize = 0;
+    uint16_t audioFormat = 0, numChannels = 0, bitsPerSample = 0;
+    uint32_t sampleRate = 0, dataSize = 0;
     std::streampos dataPos = 0;
 
     while (f && !f.eof()) {
@@ -40,37 +36,26 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
             audioFormat = read_u16_le(f);
             numChannels = read_u16_le(f);
             sampleRate = read_u32_le(f);
-            (void)read_u32_le(f); // byte rate
-            (void)read_u16_le(f); // block align
+            (void)read_u32_le(f); (void)read_u16_le(f);
             bitsPerSample = read_u16_le(f);
-            // Skip any extension bytes
-            if (chunkSize > 16) {
-                f.seekg(chunkSize - 16, std::ios::cur);
-            }
+            if (chunkSize > 16) f.seekg(chunkSize - 16, std::ios::cur);
         } else if (chunkId == "data") {
             dataSize = chunkSize;
             dataPos = f.tellg();
             f.seekg(chunkSize, std::ios::cur);
         } else {
-            // skip unknown chunk
             f.seekg(chunkSize, std::ios::cur);
         }
-        // Chunks are word-aligned; if odd size, skip pad byte
         if (chunkSize % 2 == 1) f.seekg(1, std::ios::cur);
     }
 
-    if (audioFormat == 0 || numChannels == 0 || sampleRate == 0 || bitsPerSample == 0 || dataSize == 0) {
-        throw std::runtime_error("Invalid or unsupported WAV file");
-    }
+    if (audioFormat == 0 || numChannels == 0 || dataSize == 0) throw std::runtime_error("Invalid WAV");
 
-    // Prepare buffer
-    size_t totalSamples = dataSize * 8ull / bitsPerSample; // across all channels
-    size_t frames = static_cast<size_t>(totalSamples / numChannels);
+    size_t totalSamples = dataSize * 8ull / bitsPerSample;
+    size_t frames = totalSamples / numChannels;
     core::AudioBuffer buffer(numChannels, frames, static_cast<float>(sampleRate));
 
-    // Read and decode samples
-    f.clear();
-    f.seekg(dataPos);
+    f.clear(); f.seekg(dataPos);
 
     auto decodePCM16 = [&](void) {
         for (size_t i = 0; i < frames; ++i) {
@@ -80,23 +65,19 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
             }
         }
     };
-
     auto decodePCM24 = [&](void) {
         for (size_t i = 0; i < frames; ++i) {
             for (size_t ch = 0; ch < numChannels; ++ch) {
                 uint8_t b[3]; f.read(reinterpret_cast<char*>(b), 3);
                 int32_t v = (b[0]) | (b[1] << 8) | (b[2] << 16);
-                // sign-extend 24-bit
                 if (v & 0x800000) v |= ~0xFFFFFF;
-                buffer.getChannel(ch)[i] = static_cast<float>(v) / 8388608.0f; // 2^23
+                buffer.getChannel(ch)[i] = static_cast<float>(v) / 8388608.0f;
             }
         }
     };
-
     auto decodeFloat32 = [&](void) {
         for (size_t i = 0; i < frames; ++i) {
             for (size_t ch = 0; ch < numChannels; ++ch) {
-                // Fix for Cppcheck invalidPointerCast: read bytes then memcpy
                 char bytes[4];
                 f.read(bytes, 4);
                 float s;
@@ -109,14 +90,11 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
     if (audioFormat == 1) {
         if (bitsPerSample == 16) decodePCM16();
         else if (bitsPerSample == 24) decodePCM24();
-        else throw std::runtime_error("Unsupported PCM bit depth: " + std::to_string(bitsPerSample));
-    } else if (audioFormat == 3) {
-        if (bitsPerSample == 32) decodeFloat32();
-        else throw std::runtime_error("Unsupported IEEE float bit depth: " + std::to_string(bitsPerSample));
+    } else if (audioFormat == 3 && bitsPerSample == 32) {
+        decodeFloat32();
     } else {
-        throw std::runtime_error("Unsupported WAV format code: " + std::to_string(audioFormat));
+        throw std::runtime_error("Unsupported format");
     }
-
     return buffer;
 }
 
