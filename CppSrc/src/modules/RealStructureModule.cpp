@@ -11,14 +11,40 @@
 
 namespace ave { namespace modules {
 
+/**
+ * @brief Real Structure Analysis Module.
+ *
+ * This module detects the structural segmentation of an audio track (sections and phrases)
+ * by computing a fused novelty curve from various spectral features (energy, MFCC, Chroma, Contrast).
+ * Segmentation points are found using adaptive peak picking on the novelty curve, followed by
+ * an optional beat snapping mechanism. It also performs a hierarchical sub-segmentation (phrases)
+ * within the main segments.
+ */
 class RealStructureModule : public core::IAnalysisModule {
 public:
+    /**
+     * @brief Get the module's name.
+     * @return The string "Structure".
+     */
     std::string getName() const override { return "Structure"; }
+
+    /**
+     * @brief Get the module's version.
+     * @return The string "1.0.0".
+     */
     std::string getVersion() const override { return "1.0.0"; }
 
-    // cppcheck-suppress uselessOverride
+    /**
+     * @brief Indicate if the module supports real-time processing.
+     * @return \c false, as this module typically processes the entire track.
+     */
     bool isRealTime() const override { return false; }
 
+    /**
+     * @brief Initialize the module with configuration parameters.
+     * @param config A JSON object containing configuration values.
+     * @return \c true if initialization was successful, \c false otherwise.
+     */
     bool initialize(const nlohmann::json& config) override {
         if (config.contains("segmentMinLength")) m_segmentMinLength = std::max(0.0, config["segmentMinLength"].get<double>());
         if (config.contains("noveltyKernelSize")) m_kernelSize = std::max<int>(4, config["noveltyKernelSize"].get<int>());
@@ -49,11 +75,30 @@ public:
         return true;
     }
 
+    /**
+     * @brief Reset the module's internal state (currently empty).
+     */
     void reset() override {}
 
-    // Depends on spectral features
+    /**
+     * @brief Get the list of modules this module depends on.
+     * @return A vector containing "Spectral" (mandatory) and implicitly "Tonality" (optional for Chroma).
+     */
     std::vector<std::string> getDependencies() const override { return {"Spectral"}; }
 
+    /**
+     * @brief Processes the analysis context to find structural segments and sub-segments.
+     *
+     * The process involves:
+     * 1. Extracting spectral features and computing Self-Similarity Matrices (SSMs).
+     * 2. Calculating and fusing novelty curves from different feature domains (Energy, MFCC, Chroma, Contrast).
+     * 3. Applying adaptive peak picking to the fused novelty curve to find main segment boundaries.
+     * 4. Performing hierarchical analysis (sub-segmentation) on the novelty curve within each main segment.
+     *
+     * @param audio The input audio buffer (used for duration and sample rate).
+     * @param context The analysis context containing results from dependency modules.
+     * @return A JSON object containing the primary "segments" and related metadata.
+     */
     nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext& context) override {
         // Retrieve spectral result
         auto specOpt = context.getModuleResult("Spectral");
@@ -124,7 +169,9 @@ public:
             }
             return S;
         };
+
         // Helper to compute novelty from SSM using checkerboard kernel
+        //
         auto noveltyFromSSM = [this](const std::vector<std::vector<double>>& S) {
             const int K = m_kernelSize;
             const size_t T = S.size();
@@ -238,7 +285,7 @@ public:
             for (size_t i = 0; i < cFrames; ++i) {
                 const auto& fr = spec["spectralContrast"][i];
                 if (fr.contains("v") && fr["v"].is_array()) {
-                    size_t dim = fr["v"].size(); // Fix: Renamed variable 'D' to 'dim' to avoid shadowing
+                    size_t dim = fr["v"].size();
                     contrastFeat[i].assign(dim, 0.0);
                     double norm2 = 0.0;
                     for (size_t d = 0; d < dim; ++d) { double vv = fr["v"][d].get<double>(); contrastFeat[i][d] = vv; norm2 += vv * vv; }
@@ -275,7 +322,8 @@ public:
         bool hasE = true;
         bool hasM = false; for (double v : noveltyMAPPED_MFCC) { if (v > 0.0) { hasM = true; break; } }
         bool hasC = false; for (double v : noveltyMAPPED_CHROMA) { if (v > 0.0) { hasC = true; break; } }
-        bool hasX = std::any_of(noveltyMAPPED_CONTRAST.begin(), noveltyMAPPED_CONTRAST.end(), [](double v){ return v > 0.0; });        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
+        bool hasX = std::any_of(noveltyMAPPED_CONTRAST.begin(), noveltyMAPPED_CONTRAST.end(), [](double v){ return v > 0.0; });
+        if (hasE) sumW += m_wE; if (hasM) sumW += m_wM; if (hasC) sumW += m_wC; if (hasX) sumW += m_wX; if (sumW <= 0.0) sumW = 1.0;
         for (size_t t = 0; t < numFrames; ++t) {
             double s = 0.0;
             if (hasE) s += m_wE * noveltyE[t];
@@ -336,7 +384,7 @@ public:
                 a = std::max<int>(0, a);
                 b = std::max<int>(a, b);
                 double sum = 0.0; int cnt = 0;
-                for (int i = a; i <= b; ++i) { sum += noveltySm[static_cast<size_t>(i)]; ++cnt; }
+                for (int i = a; i <= b; ++i) { sum += noveltySm[static_cast<size_size_t>(i)]; ++cnt; }
                 double lmean = cnt ? (sum / cnt) : 0.0;
                 double threshLocal = lmean * (1.0 + m_peakThreshold);
                 double threshGlobal = gmean + m_peakThreshold * gstd;
@@ -413,7 +461,7 @@ public:
             segments.push_back({{"start", t0}, {"end", dur}, {"label", std::string("segment_") + std::to_string(bi)}, {"confidence", conf}});
         }
 
-        // Phase 2.2: Hierarchical analysis using global novelty (refactored)
+        // Phase 2.2: Hierarchical analysis using global novelty
         performHierarchicalAnalysis(segments, noveltySm, spec, context, audio);
 
         nlohmann::json result = {
@@ -434,26 +482,41 @@ public:
         return result;
     }
 
+    /**
+     * @brief Validates the structure of the module's output JSON.
+     * @param output The JSON object produced by the process function.
+     * @return \c true if the output contains the mandatory fields, \c false otherwise.
+     */
     bool validateOutput(const nlohmann::json& output) const override {
         return output.contains("segments") && output.contains("count");
     }
 
 private:
-    double m_segmentMinLength = 8.0; // seconds
-    int m_kernelSize = 64;           // frames (half-size per quadrant)
-    int m_peakMeanWindow = 32;       // frames
-    double m_peakThreshold = 0.1;    // multiplicative increment over mean
-    bool m_debug = false;
+    double m_segmentMinLength = 8.0; ///< @brief Minimum duration in seconds allowed for a segment.
+    int m_kernelSize = 64;           ///< @brief Size of the checkerboard kernel (K) in frames.
+    int m_peakMeanWindow = 32;       ///< @brief Window size (W) in frames for adaptive mean calculation.
+    double m_peakThreshold = 0.1;    ///< @brief Multiplicative increment over the mean for peak detection threshold.
+    bool m_debug = false;            ///< @brief Flag to enable or disable debug output.
     // Novelty fusion weights (configurable)
-    double m_wE = 0.2; // Energy
-    double m_wM = 0.3; // MFCC
-    double m_wC = 0.3; // Chroma
-    double m_wX = 0.2; // Spectral Contrast
+    double m_wE = 0.2; ///< @brief Weight for Energy-based novelty.
+    double m_wM = 0.3; ///< @brief Weight for MFCC-based novelty.
+    double m_wC = 0.3; ///< @brief Weight for Chroma-based novelty.
+    double m_wX = 0.2; ///< @brief Weight for Spectral Contrast-based novelty.
     // Sub-segmentation sensitivity controls
-    double m_subPeakThresholdFactor = 0.5; // thrSub = m_peakThreshold * factor
-    int m_subPeakWindowDivisor = 2;        // Wsub = m_peakMeanWindow / divisor
+    double m_subPeakThresholdFactor = 0.5; ///< @brief Factor to reduce the primary peak threshold for sub-segmentation.
+    int m_subPeakWindowDivisor = 2;        ///< @brief Divisor to reduce the primary mean window size for sub-segmentation.
 
-    // Phase 2.2: Multi-Scale Peak Picking on global novelty curve
+    /**
+     * @brief Performs hierarchical analysis (phrase segmentation) within each main segment.
+     *
+     * This uses a more sensitive peak-picking approach on the global novelty curve confined to the segment's boundaries.
+     *
+     * @param segments The main segments found in the first phase (modified in place).
+     * @param noveltySm The global smoothed novelty curve.
+     * @param spec The spectral analysis result (used for frame rate and hop size).
+     * @param context The analysis context (used for downbeats).
+     * @param audio The audio buffer (used for sample rate).
+     */
     void performHierarchicalAnalysis(
         nlohmann::json& segments,
         const std::vector<double>& noveltySm,
@@ -547,15 +610,18 @@ private:
             std::vector<size_t> subPeaks = findPeaksOnCurve(subNoveltyCurve);
             std::vector<double> localTimes; localTimes.reserve(subPeaks.size());
             for (size_t idx : subPeaks) {
+                // Adjust index back to global frame time, then convert to seconds
                 double tSec = static_cast<double>(i0 + idx + static_cast<size_t>(smoothRadius)) * static_cast<double>(Hspec) / static_cast<double>(srLoc);
                 if (tSec > s && tSec < e) localTimes.push_back(tSec);
             }
             std::sort(localTimes.begin(), localTimes.end());
             snapTimes(localTimes);
+
             nlohmann::json subs = nlohmann::json::array();
             double tStart = s; size_t phraseCount = 0;
             for (double tEnd : localTimes) {
                 if (tEnd <= tStart) continue;
+                // Find approximate novelty value at the break point for confidence
                 size_t idx = static_cast<size_t>(std::min<double>(std::max(0.0, (tEnd - s) * frameRate), static_cast<double>(subNoveltyCurve.size() - 1)));
                 double conf = subNoveltyCurve[idx];
                 subs.push_back({{"start", tStart}, {"end", tEnd}, {"label", std::string("phrase_") + std::to_string(++phraseCount)}, {"confidence", conf}});
@@ -569,6 +635,10 @@ private:
         }
     }
 
+    /**
+     * @brief Creates a minimal JSON result object for error or empty input cases.
+     * @return A basic JSON object with empty segment array.
+     */
     static nlohmann::json makeEmptyResult() {
         return nlohmann::json{
             {"segments", nlohmann::json::array()},
@@ -577,6 +647,10 @@ private:
     }
 };
 
+/**
+ * @brief Factory function to create an instance of the RealStructureModule.
+ * @return A unique pointer to the newly created module.
+ */
 std::unique_ptr<core::IAnalysisModule> createRealStructureModule() {
     return std::make_unique<RealStructureModule>();
 }

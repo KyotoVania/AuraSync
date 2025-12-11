@@ -9,12 +9,39 @@
 
 namespace ave { namespace modules {
 
+/**
+ * @brief Real Onset Detection Module.
+ *
+ * This module detects musical onsets (note attacks) by applying peak picking
+ * heuristics to an Onset Detection Function (ODF). It primarily relies on the
+ * ODF computed internally by the BPM module (a dependency) for efficiency.
+ * It provides a fallback ODF calculation if the dependency result is unavailable.
+ */
 class RealOnsetModule : public core::IAnalysisModule {
 public:
+    /**
+     * @brief Get the module's name.
+     * @return The string "Onset".
+     */
     std::string getName() const override { return "Onset"; }
+
+    /**
+     * @brief Get the module's version.
+     * @return The string "1.0.0".
+     */
     std::string getVersion() const override { return "1.0.0"; }
+
+    /**
+     * @brief Indicate if the module supports real-time processing.
+     * @return \c true, as this module can process in real-time.
+     */
     bool isRealTime() const override { return true; }
 
+    /**
+     * @brief Initialize the module with configuration parameters.
+     * @param config A JSON object containing configuration values.
+     * @return \c true if initialization was successful, \c false otherwise.
+     */
     bool initialize(const nlohmann::json& config) override {
         if (config.contains("fftSize")) m_fftSize = std::max<size_t>(256, config["fftSize"].get<size_t>());
         if (config.contains("hopSize")) m_hopSize = std::max<size_t>(1, config["hopSize"].get<size_t>());
@@ -27,10 +54,28 @@ public:
         return true;
     }
 
+    /**
+     * @brief Reset the module's internal state (currently empty).
+     */
     void reset() override {}
 
+    /**
+     * @brief Get the list of modules this module depends on.
+     * @return A vector containing "BPM", as the BPM module typically computes the ODF.
+     */
     std::vector<std::string> getDependencies() const override { return {"BPM"}; }
 
+    /**
+     * @brief Processes the audio buffer to detect onsets.
+     *
+     * 1. Retrieves the ODF from the BPM module result, or calculates a basic energy-based ODF.
+     * 2. Smooths the ODF.
+     * 3. Applies adaptive peak picking to the smoothed ODF using the configured sensitivity and window.
+     *
+     * @param audio The input audio buffer.
+     * @param context The analysis context containing results from dependency modules (BPM).
+     * @return A JSON object containing the detected onsets and related metadata.
+     */
     nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext& context) override {
         // 1. Retrieve ODF from BPM module result
         nlohmann::json odfJson = nlohmann::json::array();
@@ -41,7 +86,7 @@ public:
             // Compatibility fallback: compute a simple energy-based ODF directly
             // using Onset module settings (time-domain, no FFT)
             const size_t N = m_fftSize;
-            const size_t H = m_hopSize == 0 ? std::max<size_t>(1, N / 4) : m_hopSize;
+            const size_t H = m_hopSize == 0 ? std::max<size_size_t>(1, N / 4) : m_hopSize;
             const double sr = context.sampleRate;
             std::vector<float> mono = audio.getMono();
             if (!mono.empty()) {
@@ -110,10 +155,12 @@ public:
                 pmA = std::max<int>(0, pmA);
                 pmB = std::min<int>(static_cast<int>(odfSm.size()) - 1, pmB);
                 bool isMax = true;
+                // Local maximum check
                 for (int i = pmA; i <= pmB; ++i) {
                     if (odfSm[static_cast<size_t>(i)] > odfSm[t]) { isMax = false; break; }
                 }
                 if (!isMax) continue;
+                // Adaptive threshold calculation (mean of previous W frames)
                 int a = static_cast<int>(t) - W;
                 int b = static_cast<int>(t) - 1;
                 a = std::max<int>(0, a);
@@ -124,7 +171,9 @@ public:
                 if (mean < 1e-6) continue;
                 double mult = (1.0 + (m_sensitivity * m_peakThreshold));
                 double thresh = mean * mult;
+                // Check if peak exceeds adaptive threshold
                 if (odfSm[t] >= thresh) {
+                    // Apply minimum distance constraint (select stronger peak if too close)
                     if (!peakIdx.empty()) {
                         if (static_cast<int>(t) - static_cast<int>(peakIdx.back()) < minDist) {
                             if (odfSm[t] > odfSm[peakIdx.back()]) {
@@ -147,6 +196,7 @@ public:
         }
         const double timeComp = static_cast<double>(smoothRadius) * framePeriod;
         for (size_t idx : peakIdx) {
+            // Apply smoothing time compensation to timestamp
             double tSec = odfJson[idx].contains("t") ? odfJson[idx]["t"].get<double>() : static_cast<double>(idx) * framePeriod;
             tSec += timeComp;
             onsets.push_back({ {"t", tSec}, {"strength", odfSm[idx]} });
@@ -159,6 +209,11 @@ public:
         };
     }
 
+    /**
+     * @brief Validates the structure of the module's output JSON.
+     * @param output The JSON object produced by the process function.
+     * @return \c true if the output contains the mandatory fields, \c false otherwise.
+     */
     bool validateOutput(const nlohmann::json& output) const override {
         return output.contains("onsets") && output.contains("count");
     }
@@ -168,11 +223,15 @@ private:
     size_t m_hopSize = 512;
     std::string m_windowType = "hann";
     double m_sensitivity = 1.0;
-    int m_peakMeanWindow = 8;      // W in frames
-    double m_peakThreshold = 0.05; // delta
-    bool m_debug = false;
+    int m_peakMeanWindow = 8;      ///< @brief Window size in frames for adaptive mean calculation (W).
+    double m_peakThreshold = 0.05; ///< @brief Threshold percentage above the mean for peak detection (delta).
+    bool m_debug = false;          ///< @brief Debug flag (currently unused in core logic).
 };
 
+/**
+ * @brief Factory function to create an instance of the RealOnsetModule.
+ * @return A unique pointer to the newly created module.
+ */
 std::unique_ptr<core::IAnalysisModule> createRealOnsetModule() {
     return std::make_unique<RealOnsetModule>();
 }

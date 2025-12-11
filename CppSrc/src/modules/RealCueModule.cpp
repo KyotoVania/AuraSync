@@ -12,23 +12,49 @@
 namespace ave::modules {
 
 /**
- * Real Cue Module - Final synthesis module that combines results from all other modules
+ * @brief Real Cue Module: Final synthesis module that combines results from all other modules
  * to generate high-level semantic cues and enhanced segment labeling.
+ *
+ * This module takes the results from lower-level analysis modules (BPM, Onset, Spectral, Tonality, Structure)
+ * and applies heuristic rules and clustering algorithms to classify segments into functional labels
+ * (e.g., Intro, Chorus, Drop) and formal labels (e.g., A, B, C), and generates high-level cues
+ * (e.g., pre-drop anticipation cues).
  */
 class RealCueModule : public core::IAnalysisModule {
 private:
-    double m_anticipationTime = 1.5; // seconds for pre-drop cues
-    double m_formalSimilarityThreshold = 0.85; // threshold for segment clustering
-    double m_consensusThreshold = 0.70; // threshold for consensus refinement on functional labels
-    
+    /// @brief Duration in seconds used for pre-drop anticipation cues.
+    double m_anticipationTime = 1.5;
+    /// @brief Similarity threshold for segment clustering into formal labels (A, B, C...).
+    double m_formalSimilarityThreshold = 0.85;
+    /// @brief Threshold for consensus refinement on functional labels within formal groups.
+    double m_consensusThreshold = 0.70;
+
 public:
+    /**
+     * @brief Get the module's name.
+     * @return The string "Cue".
+     */
     std::string getName() const override { return "Cue"; }
+
+    /**
+     * @brief Get the module's version.
+     * @return The string "1.0.0-real".
+     */
     std::string getVersion() const override { return "1.0.0-real"; }
-    
+
+    /**
+     * @brief Get the list of modules this module depends on.
+     * @return A vector of dependency names.
+     */
     std::vector<std::string> getDependencies() const override {
         return {"BPM", "Onset", "Spectral", "Tonality", "Structure"};
     }
-    
+
+    /**
+     * @brief Initialize the module with configuration parameters.
+     * @param config A JSON object containing configuration values.
+     * @return \c true if initialization was successful, \c false otherwise.
+     */
     bool initialize(const nlohmann::json& config) override {
         if (config.contains("anticipationTime")) {
             m_anticipationTime = config["anticipationTime"];
@@ -41,28 +67,45 @@ public:
         }
         return true;
     }
-    
+
+    /**
+     * @brief Reset the module's internal state to its default values.
+     */
     void reset() override {
         m_anticipationTime = 1.5;
     }
-    
-    nlohmann::json process(const core::AudioBuffer& audio, 
+
+    /**
+     * @brief Process the audio data and context to generate high-level cues and labeled segments.
+     *
+     * The process includes:
+     * 1. Creating phased beats (1, 2, 3, 4) from the beat grid.
+     * 2. Analyzing energy and density metrics for each segment.
+     * 3. Applying semantic labeling heuristics and formal clustering.
+     * 4. Building a continuous intensity curve.
+     * 5. Generating anticipation and segment cues.
+     *
+     * @param audio The input audio buffer (not directly used by this high-level module).
+     * @param context The analysis context containing results from dependency modules.
+     * @return A JSON object containing the results (labeled segments, phased beats, cues, intensity curve).
+     */
+    nlohmann::json process(const core::AudioBuffer& audio,
                            const core::AnalysisContext& context) override {
         // Task 1: Beat Phasing
         auto phasedBeats = createPhasedBeats(context);
-        
+
         // Task 2: Analyze energy and density per segment
         auto enrichedSegments = analyzeSegmentMetrics(context);
-        
+
         // Task 3: Apply semantic labeling to segments
         auto labeledSegments = applySemanticLabeling(enrichedSegments);
-        
+
         // Task 3b: Build continuous intensity curve from segment energies
         auto intensityCurve = buildIntensityCurve(labeledSegments);
-        
+
         // Task 4: Generate anticipation cues
         auto cues = generateCues(labeledSegments);
-        
+
         return {
             {"segments", labeledSegments},
             {"phasedBeats", phasedBeats},
@@ -70,34 +113,43 @@ public:
             {"intensityCurve", intensityCurve}
         };
     }
-    
+
+    /**
+     * @brief Validate the structure of the module's output JSON.
+     * @param output The JSON object produced by the process function.
+     * @return \c true if the output contains the mandatory fields, \c false otherwise.
+     */
     bool validateOutput(const nlohmann::json& output) const override {
-        return output.contains("segments") && 
-               output.contains("phasedBeats") && 
+        return output.contains("segments") &&
+               output.contains("phasedBeats") &&
                output.contains("cues");
     }
-    
+
 private:
     /**
-     * Task 1: Create phased beats from BPM data
-     * Adds phase information (1,2,3,4) to beat grid based on downbeats
+     * @brief Creates phased beats from BPM data.
+     *
+     * Adds phase information (1, 2, 3, 4) to the beat grid by identifying downbeats.
+     *
+     * @param context The analysis context containing BPM results.
+     * @return A JSON array of beat objects, each with time, strength, and phase.
      */
     nlohmann::json createPhasedBeats(const core::AnalysisContext& context) {
         auto bpmResult = context.getModuleResult("BPM");
         if (!bpmResult || !bpmResult->contains("beatGrid") || !bpmResult->contains("downbeats")) {
             return nlohmann::json::array();
         }
-        
+
         auto& beatGrid = (*bpmResult)["beatGrid"];
         auto& downbeats = (*bpmResult)["downbeats"];
-        
+
         nlohmann::json phasedBeats = nlohmann::json::array();
         int beatPhase = 1;
         size_t downbeatIndex = 0;
-        
+
         for (const auto& beat : beatGrid) {
             float beatTime = beat["t"];
-            
+
             // Check if this beat is a downbeat (within small tolerance)
             bool isDownbeat = false;
             while (downbeatIndex < downbeats.size()) {
@@ -113,13 +165,13 @@ private:
                     downbeatIndex++;
                 }
             }
-            
+
             phasedBeats.push_back({
                 {"t", beatTime},
                 {"strength", beat["strength"]},
                 {"phase", beatPhase}
             });
-            
+
             // Increment phase for next beat (unless this was a downbeat that resets to 1)
             if (!isDownbeat) {
                 beatPhase = (beatPhase % 4) + 1;
@@ -128,14 +180,13 @@ private:
                 beatPhase = 2;
             }
         }
-        
+
         return phasedBeats;
     }
-    
+
     /**
-     * Task 2: Analyze energy and density metrics for each segment
+     * @brief Internal structure to hold segment features for rule-based scoring.
      */
-    // Feature container for rule-based scoring
     struct SegmentFeatures {
         double duration = 0.0;
         // Rhythmic
@@ -154,24 +205,39 @@ private:
         double relativePosition = 0.0;  // segment mid-time / track duration
     };
 
+    /**
+     * @brief Computes a combined overall energy value from the main spectral bands.
+     * @param low Energy in the low band.
+     * @param mid Energy in the mid band.
+     * @param high Energy in the high band.
+     * @return The weighted overall energy.
+     */
     static double overallEnergyFromBands(double low, double mid, double high) {
         // Emphasize bass slightly
         return 0.5 * low + 0.3 * mid + 0.2 * high;
     }
 
+    /**
+     * @brief Analyzes and calculates various metrics (energy, density, stability) for each segment.
+     *
+     * Gathers data from Spectral, Onset, and Tonality modules to enrich the segments provided by Structure.
+     *
+     * @param context The analysis context containing results from dependency modules.
+     * @return A JSON array of segment objects, each enriched with calculated feature metrics.
+     */
     nlohmann::json analyzeSegmentMetrics(const core::AnalysisContext& context) {
         auto structureResult = context.getModuleResult("Structure");
         auto spectralResult = context.getModuleResult("Spectral");
         auto onsetResult = context.getModuleResult("Onset");
         auto tonalityResult = context.getModuleResult("Tonality");
-        
+
         if (!structureResult || !structureResult->contains("segments")) {
             return nlohmann::json::array();
         }
-        
+
         auto segments = (*structureResult)["segments"];
         nlohmann::json enrichedSegments = nlohmann::json::array();
-        
+
         // Key clarity from tonality (track-level confidence) if available
         double keyClarityTrack = 0.0;
         if (tonalityResult && tonalityResult->contains("confidence")) {
@@ -373,11 +439,28 @@ private:
     }
 
     /**
-     * Task 3: Apply semantic labeling heuristics
+     * @brief Applies semantic labeling heuristics and formal clustering to the enriched segments.
+     *
+     * Calculates scores for functional labels (intro, drop, chorus, etc.) using normalized features,
+     * assigns the best label, performs formal clustering (A, B, C...) based on feature similarity,
+     * and refines functional labels based on consensus within formal clusters.
+     *
+     * @param enrichedSegments A JSON array of segments enriched with metrics from \c analyzeSegmentMetrics.
+     * @return A JSON array of segments, now with "label" (functional) and "formalLabel" (formal) fields.
      */
     nlohmann::json applySemanticLabeling(const nlohmann::json& enrichedSegments) {
         // Build SegmentFeatures list and compute normalization ranges
-        struct Range { double minv=1e9, maxv=-1e9; void add(double x){ if(x<minv)minv=x; if(x>maxv)maxv=x; } double norm(double x) const { if(maxv<=minv) return 0.0; double y=(x-minv)/(maxv-minv); if(y<0.0) y=0.0; if(y>1.0) y=1.0; return y; } };
+        struct Range {
+            double minv=1e9, maxv=-1e9;
+            void add(double x){ if(x<minv)minv=x; if(x>maxv)maxv=x; }
+            double norm(double x) const {
+                if(maxv<=minv) return 0.0;
+                double y=(x-minv)/(maxv-minv);
+                if(y<0.0) y=0.0;
+                if(y>1.0) y=1.0;
+                return y;
+            }
+        };
         std::vector<SegmentFeatures> feats;
         feats.reserve(enrichedSegments.size());
         Range rOnset, rLow, rMid, rHigh, rBass, rOverall, rDur, rCentroid, rTimbralVar, rRhythmVar;
@@ -653,10 +736,14 @@ private:
 
         return labeledSegments;
     }
-    
+
     /**
-     * Build a simple continuous intensity curve from per-segment overall energy.
-     * Produces points at segment mid-times, values normalized to [0,1], with slight smoothing.
+     * @brief Builds a simple continuous intensity curve from per-segment overall energy.
+     *
+     * Produces points at segment mid-times, with values normalized to [0,1], applying slight smoothing.
+     *
+     * @param labeledSegments The segments with computed overallEnergy values.
+     * @return A JSON array of points \c {"t", "v"} representing the intensity curve over time.
      */
     nlohmann::json buildIntensityCurve(const nlohmann::json& labeledSegments) {
         nlohmann::json curve = nlohmann::json::array();
@@ -690,18 +777,20 @@ private:
     }
 
     /**
-     * Task 4: Generate anticipation cues and segment cues
+     * @brief Generates anticipation cues (e.g., pre-drop) and simple segment cues.
+     * @param labeledSegments The segments with assigned functional labels.
+     * @return A JSON array of cue objects, each with time, type, and duration.
      */
     nlohmann::json generateCues(const nlohmann::json& labeledSegments) {
         nlohmann::json cues = nlohmann::json::array();
-        
+
         for (size_t i = 0; i < labeledSegments.size(); ++i) {
             const auto& segment = labeledSegments[i];
             std::string label = segment["label"];
             double start = segment["start"];
             double end = segment["end"];
             double duration = end - start;
-            
+
             // Generate anticipation cues for drops
             if (label == "drop" && i > 0) {
                 std::string prevLabel = labeledSegments[i-1]["label"];
@@ -719,7 +808,7 @@ private:
                     });
                 }
             }
-            
+
             // Generate segment cues
             cues.push_back({
                 {"t", start},
@@ -727,36 +816,43 @@ private:
                 {"duration", duration}
             });
         }
-        
+
         return cues;
     }
-    
+
     /**
-     * Helper: Calculate onset density in a time range
+     * @brief Helper function to calculate the onset density (onsets per second) in a time range.
+     * @param onsetResult The result JSON from the Onset module.
+     * @param start The start time of the range.
+     * @param end The end time of the range.
+     * @return The onset density as a double.
      */
-    double calculateOnsetDensity(const std::optional<nlohmann::json>& onsetResult, 
+    double calculateOnsetDensity(const std::optional<nlohmann::json>& onsetResult,
                                 double start, double end) {
         if (!onsetResult || !onsetResult->contains("onsets")) {
             return 0.0;
         }
-        
+
         auto& onsets = (*onsetResult)["onsets"];
         int count = 0;
-        
+
         for (const auto& onset : onsets) {
             double t = onset["t"];
             if (t >= start && t <= end) {
                 count++;
             }
         }
-        
+
         double duration = end - start;
         return duration > 0.0 ? static_cast<double>(count) / duration : 0.0;
     }
-    
+
     /**
-     * Helper: Calculate average spectral energies in a time range (dynamic bands)
-     * Returns a map bandName -> average energy in [start,end].
+     * @brief Helper function to calculate average spectral energies in a time range across dynamic bands.
+     * @param spectralResult The result JSON from the Spectral module.
+     * @param start The start time of the range.
+     * @param end The end time of the range.
+     * @return A map of band name to its average energy in the range.
      */
     std::map<std::string, double> calculateSpectralEnergies(const std::optional<nlohmann::json>& spectralResult,
                                                             double start, double end) {
@@ -775,18 +871,22 @@ private:
         }
         return energies;
     }
-    
+
     /**
-     * Helper: Calculate average value for a band in time range
+     * @brief Helper function to calculate the average value for a single spectral band within a time range.
+     * @param band The JSON array of time-value frames for the band.
+     * @param start The start time of the range.
+     * @param end The end time of the range.
+     * @return The average value of the band in the range.
      */
     double calculateBandAverage(const nlohmann::json& band, double start, double end) {
         if (!band.is_array()) {
             return 0.0;
         }
-        
+
         double sum = 0.0;
         int count = 0;
-        
+
         for (const auto& frame : band) {
             if (frame.contains("t") && frame.contains("v")) {
                 double t = frame["t"];
@@ -796,11 +896,15 @@ private:
                 }
             }
         }
-        
+
         return count > 0 ? sum / count : 0.0;
     }
 };
 
+/**
+ * @brief Factory function to create an instance of the RealCueModule.
+ * @return A unique pointer to the newly created module.
+ */
 std::unique_ptr<core::IAnalysisModule> createRealCueModule() {
     return std::make_unique<RealCueModule>();
 }

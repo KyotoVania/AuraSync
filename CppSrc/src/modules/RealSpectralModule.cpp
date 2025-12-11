@@ -12,12 +12,41 @@
 namespace ave {
 namespace modules {
 
+/**
+ * @brief Real Spectral Analysis Module.
+ *
+ * This module performs Short-Time Fourier Transform (STFT) on the audio signal
+ * to extract various spectral features over time, including:
+ * 1. Band energies based on configurable frequency bands.
+ * 2. Mel-Frequency Cepstral Coefficients (MFCCs).
+ * 3. Spectral Contrast.
+ * 4. An optional high-resolution spectral timeline.
+ */
 class RealSpectralModule : public core::IAnalysisModule {
 public:
+    /**
+     * @brief Get the module's name.
+     * @return The string "Spectral".
+     */
     std::string getName() const override { return "Spectral"; }
+
+    /**
+     * @brief Get the module's version.
+     * @return The string "1.0.2".
+     */
     std::string getVersion() const override { return "1.0.2"; }
+
+    /**
+     * @brief Indicate if the module supports real-time processing.
+     * @return \c true, as this module can process in real-time.
+     */
     bool isRealTime() const override { return true; }
 
+    /**
+     * @brief Initialize the module with configuration parameters.
+     * @param config A JSON object containing configuration values.
+     * @return \c true if initialization was successful, \c false otherwise.
+     */
     bool initialize(const nlohmann::json& config) override {
         // FFT Parameters
         if (config.contains("fftSize")) m_fftSize = std::max<size_t>(32, config["fftSize"].get<size_t>());
@@ -50,10 +79,20 @@ public:
         return true;
     }
 
+    /**
+     * @brief Reset the module's internal state.
+     */
     void reset() override {
         // No persistent FFTW plan kept between process() calls in this simple implementation
     }
 
+    /**
+     * @brief Processes the audio buffer to compute spectral features frame by frame.
+     *
+     * @param audio The input audio buffer.
+     * @param context The analysis context (used for sample rate).
+     * @return A JSON object containing spectral bands, MFCCs, spectral contrast, and metadata.
+     */
     nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext& context) override {
         const float sampleRate = audio.getSampleRate();
         const size_t N = m_fftSize;
@@ -100,6 +139,7 @@ public:
         bandRanges.reserve(m_bandDefs.size());
         const double nyquist = sampleRate / 2.0;
 
+        // Extract band definitions and ensure valid ranges
         for (auto it = m_bandDefs.begin(); it != m_bandDefs.end(); ++it) {
             const std::string name = it.key();
             const auto arr = it.value();
@@ -120,7 +160,7 @@ public:
         std::vector<int> bandBinCounts(bandNames.size(), 0);
 
         // Map bins to bands
-        // FIX: Start at k=1 to exclude DC (0Hz) from band mapping to fix White Noise ratio test
+        // Start at k=1 to exclude DC (0Hz) from band mapping
         for (size_t k = 1; k < numBins; ++k) {
             double fk = (static_cast<double>(k) * sampleRate) / static_cast<double>(N);
             for (size_t b = 0; b < bandRanges.size(); ++b) {
@@ -246,12 +286,12 @@ public:
 
             // --- 1. Band Energies ---
             std::vector<double> bandEnergy(bandNames.size(), 0.0);
-            // FIX: Loop from k=1 to exclude DC from energy sum
+            // Loop from k=1 to exclude DC from energy sum
             for (size_t k = 1; k < numBins; ++k) {
                 int b = binToBand[k];
                 if (b >= 0) bandEnergy[static_cast<size_t>(b)] += P[k];
             }
-            // Normalize by bin count (density) to fix White Noise test
+            // Normalize by bin count (density)
             for (size_t b = 0; b < bandNames.size(); ++b) {
                 if (bandBinCounts[b] > 0) {
                     bandEnergy[b] /= static_cast<double>(bandBinCounts[b]);
@@ -340,7 +380,7 @@ public:
                 }
 
                 std::vector<double> e(bandNames.size(), 0.0);
-                // FIX: Ignore DC bin here too
+                // Ignore DC bin here too
                 for (size_t k = 1; k < numBins; ++k) {
                     int b = binToBand[k];
                     if (b >= 0) e[static_cast<size_t>(b)] += P[k];
@@ -384,26 +424,38 @@ public:
         return result;
     }
 
+    /**
+     * @brief Validates the structure of the module's output JSON.
+     * @param output The JSON object produced by the process function.
+     * @return \c true if the output contains the mandatory fields, \c false otherwise.
+     */
     bool validateOutput(const nlohmann::json& output) const override {
         return output.contains("bands") && output.contains("frameRate");
     }
 
 private:
-    size_t m_fftSize = 2048;
-    size_t m_hopSize = 512;
-    std::string m_windowType = "hann";
-    nlohmann::json m_bandDefs = nlohmann::json::object();
+    size_t m_fftSize = 2048; ///< @brief Size of the FFT window in samples.
+    size_t m_hopSize = 512;  ///< @brief Hop size between consecutive FFT windows in samples.
+    std::string m_windowType = "hann"; ///< @brief Type of window function (e.g., "hann", "hamming").
+    nlohmann::json m_bandDefs = nlohmann::json::object(); ///< @brief Definitions of custom frequency bands for energy calculation.
 
     // Extended spectral timeline parameters
-    bool m_extendedMode = false;
-    int m_timelineResolutionHz = 100; // points per second
+    bool m_extendedMode = false; ///< @brief Flag to enable or disable the high-resolution spectral timeline.
+    int m_timelineResolutionHz = 100; ///< @brief Desired temporal resolution for the timeline in frames per second.
 
     // Spectral contrast parameters
-    int m_contrastNumBands = 6;
-    double m_contrastMinFreq = 60.0;
-    double m_contrastTopPercent = 0.2;
-    double m_contrastBottomPercent = 0.2;
+    int m_contrastNumBands = 6; ///< @brief Number of bands for the spectral contrast calculation.
+    double m_contrastMinFreq = 60.0; ///< @brief Minimum frequency for the spectral contrast bands.
+    double m_contrastTopPercent = 0.2; ///< @brief Top percentage of energy used to compute the peak (numerator) for contrast.
+    double m_contrastBottomPercent = 0.2; ///< @brief Bottom percentage of energy used to compute the valley (denominator) for contrast.
 
+    /**
+     * @brief Creates a minimal JSON result object for error or empty input cases.
+     * @param sampleRate The sample rate of the audio.
+     * @param N The FFT size.
+     * @param H The hop size.
+     * @return A basic JSON object with bands set to empty object and metadata.
+     */
     static nlohmann::json makeEmptyResult(float sampleRate, size_t N, size_t H) {
         if (H == 0) H = std::max<size_t>(1, N / 4);
         return {
@@ -415,6 +467,10 @@ private:
     }
 };
 
+/**
+ * @brief Factory function to create an instance of the RealSpectralModule.
+ * @return A unique pointer to the newly created module.
+ */
 std::unique_ptr<core::IAnalysisModule> createRealSpectralModule() {
     return std::make_unique<RealSpectralModule>();
 }
