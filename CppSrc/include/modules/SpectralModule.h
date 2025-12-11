@@ -10,7 +10,13 @@
 namespace ave { namespace core { class IAnalysisModule; } }
 
 namespace ave { namespace modules {
-    // Factory for the real spectral analysis module
+    /**
+     * @brief Factory function to create an instance of the concrete Spectral Analysis module.
+     *
+     * This module typically handles Short-Time Fourier Transform (STFT),
+     * spectral feature extraction (e.g., centroid, rolloff, flux), and band energy calculation.
+     * @return A unique pointer to the newly created IAnalysisModule implementation for spectral analysis.
+     */
     std::unique_ptr<ave::core::IAnalysisModule> createRealSpectralModule();
 } }
 
