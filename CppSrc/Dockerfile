@@ -1,49 +1,27 @@
-name: Docker Build & Push
+# 1. Image de base (Ubuntu avec les outils de compilation)
+FROM ubuntu:22.04
 
-on:
-  workflow_run:
-    workflows: ["C++ Audio Analyzer CI/CD"]
-    types:
-      - completed
+# Éviter les questions interactives lors de l'installation
+ENV DEBIAN_FRONTEND=noninteractive
 
-permissions:
-  contents: read
-  packages: write
+# 2. Installer les dépendances (CMake, Compilateur, FFTW)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libfftw3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-jobs:
-  build-and-push:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
+# 3. Définir le dossier de travail dans le conteneur
+WORKDIR /app
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+# 4. Copier tout le contenu du dossier CppSrc dans le conteneur
+COPY . .
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+# 5. Créer le dossier build, compiler le projet
+RUN mkdir build && cd build && \
+    cmake .. && \
+    make
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,format=long
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          # CORRECTION: Le contexte est juste le dossier CppSrc
-          context: CppSrc
-          file: CppSrc/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+# 6. Commande par défaut (lancer l'analyseur ou les tests)
+# Remplace "ave_tests" par le nom de ton exécutable principal si nécessaire
+CMD ["./build/ave_tests"]
