@@ -10,7 +10,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # --- Dependencies ---
 
-# nlohmann/json
+# nlohmann/json (FetchContent is great, works everywhere)
 include(FetchContent)
 FetchContent_Declare(
         json
@@ -19,22 +19,28 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# FFTW3 (assuming it's in fftw-3.3.5-dll64)
-set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/fftw-3.3.5-dll64)
+# FFTW3 Configuration (Cross-Platform Fix)
+if(WIN32)
+    # Windows: Keep your existing logic
+    set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/fftw-3.3.5-dll64)
+    include_directories(${FFTW3_DIR})
+    set(FFTW_LIBRARIES ${FFTW3_DIR}/libfftw3-3.lib)
+else()
+    # Linux/macOS: Use system package manager (apt/brew)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FFTW3 REQUIRED fftw3)
+    include_directories(${FFTW3_INCLUDE_DIRS})
+    set(FFTW_LIBRARIES ${FFTW3_LIBRARIES})
+endif()
 
 # --- Library ---
 
 # Core library
 add_library(ave_core STATIC
-        # Core
         src/core/AudioBuffer.cpp
         src/core/JsonContract.cpp
-
-        # Pipeline
         src/pipeline/AnalysisPipeline.cpp
         src/pipeline/AudioLoader.cpp
-
-        # Modules
         src/modules/RealBPMModule.cpp
         src/modules/RealSpectralModule.cpp
         src/modules/RealOnsetModule.cpp
@@ -46,12 +52,11 @@ add_library(ave_core STATIC
 target_include_directories(ave_core
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${FFTW3_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
 )
 
-# --- QM-DSP minimal static library (Mixxx-compatible) ---
+# --- QM-DSP minimal static library ---
 add_library(ave_qmdsp STATIC
         lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
         lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp
@@ -65,7 +70,6 @@ add_library(ave_qmdsp STATIC
         lib/qm-dsp/dsp/signalconditioning/Filter.cpp
         lib/qm-dsp/dsp/signalconditioning/FiltFilt.cpp
         lib/qm-dsp/dsp/signalconditioning/Framer.cpp
-        # Key detection dependencies
         lib/qm-dsp/base/Pitch.cpp
         lib/qm-dsp/dsp/chromagram/Chromagram.cpp
         lib/qm-dsp/dsp/chromagram/ConstantQ.cpp
@@ -74,26 +78,22 @@ add_library(ave_qmdsp STATIC
         lib/qm-dsp/dsp/keydetection/GetKeyMode.cpp
 )
 
-# The qm-dsp sources use relative includes like <dsp/...> so we point include dirs to the qm-dsp root
-# and to its include directory if present.
 target_include_directories(ave_qmdsp PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
 )
 
-# Silence warnings for external code if needed
 if (MSVC)
     target_compile_definitions(ave_qmdsp PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
-# Use double precision in kissfft to match qm-dsp's FFT wrapper
 target_compile_definitions(ave_qmdsp PUBLIC KISS_FFT_USE_DOUBLE kiss_fft_scalar=double)
 
-# Link qm-dsp into core library
+# Link qm-dsp and FFTW into core library
 target_link_libraries(ave_core
         PUBLIC
         nlohmann_json::nlohmann_json
-        ${FFTW3_DIR}/libfftw3-3.lib
         ave_qmdsp
+        ${FFTW_LIBRARIES}
 )
 
 # --- Main Executable ---
@@ -105,12 +105,14 @@ target_link_libraries(ave_analysis
         ave_core
 )
 
-# Copy FFTW DLL to output directory for main
-add_custom_command(TARGET ave_analysis POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${FFTW3_DIR}/libfftw3-3.dll"
-        $<TARGET_FILE_DIR:ave_analysis>
-)
+# Copy FFTW DLL only on Windows
+if(WIN32)
+    add_custom_command(TARGET ave_analysis POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FFTW3_DIR}/libfftw3-3.dll"
+            $<TARGET_FILE_DIR:ave_analysis>
+    )
+endif()
 
 # --- Tests ---
 
@@ -119,7 +121,6 @@ option(BUILD_TESTS "Build tests" ON)
 if(BUILD_TESTS)
     enable_testing()
 
-    # Test executable
     option(AVE_BUILD_ONSET_TESTS "Build granular onset tests" ON)
 
     set(AVE_TEST_SOURCES
@@ -148,48 +149,32 @@ if(BUILD_TESTS)
 
     add_executable(ave_tests ${AVE_TEST_SOURCES})
 
-    target_link_libraries(ave_tests
-            PRIVATE
-            ave_core
-    )
+    target_link_libraries(ave_tests PRIVATE ave_core)
 
-    # Copy test assets (WAV files) next to the test binary, if present
-    add_custom_command(TARGET ave_tests POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/assets"
-            "$<TARGET_FILE_DIR:ave_tests>/assets"
-    )
+    # Copy test assets if they exist
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/assets")
+        add_custom_command(TARGET ave_tests POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/assets"
+                "$<TARGET_FILE_DIR:ave_tests>/assets"
+        )
+    endif()
 
-    # Copy FFTW DLL to test output directory
-    add_custom_command(TARGET ave_tests POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${FFTW3_DIR}/libfftw3-3.dll"
-            $<TARGET_FILE_DIR:ave_tests>
-    )
+    # Copy FFTW DLL only on Windows
+    if(WIN32)
+        add_custom_command(TARGET ave_tests POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${FFTW3_DIR}/libfftw3-3.dll"
+                $<TARGET_FILE_DIR:ave_tests>
+        )
+    endif()
 
     add_test(NAME ave_tests COMMAND ave_tests)
 endif()
 
 # --- Installation ---
-
 install(TARGETS ave_analysis ave_core
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
 )
-
-install(DIRECTORY include/
-        DESTINATION include/ave
-)
-
-# --- Build Info ---
-
-message(STATUS "========================================")
-message(STATUS "Audio Visual Engine - Analysis Pipeline")
-message(STATUS "========================================")
-message(STATUS "Version: ${PROJECT_VERSION}")
-message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "FFTW3 Directory: ${FFTW3_DIR}")
-message(STATUS "Build Tests: ${BUILD_TESTS}")
-message(STATUS "========================================")
