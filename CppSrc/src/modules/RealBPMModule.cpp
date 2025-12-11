@@ -19,11 +19,39 @@
 
 namespace ave::modules {
 
+/**
+ * @brief Concrete implementation of the BPM and Beat Tracking analysis module.
+ *
+ * This module uses an advanced pipeline involving:
+ * 1. Complex Spectral Difference Onset Detection Function (ODF) extraction.
+ * 2. Peak detection to identify potential beat candidates.
+ * 3. Tempogram computation (Autocorrelation or Hybrid) for tempo evidence over time.
+ * 4. Dynamic Programming (Viterbi-style) to find the most likely beat sequence.
+ * 5. Post-processing including octave correction and missing beat interpolation.
+ *
+ * It also includes a specialized path using the QM-DSP library for exact replication
+ * of the Mixxx audio analysis engine.
+ */
 class RealBPMModule : public core::IAnalysisModule {
 public:
+    /**
+     * @brief Returns the unique name of the module.
+     * @return The module name "BPM".
+     */
     std::string getName() const override { return "BPM"; }
+
+    /**
+     * @brief Returns the version string of the module.
+     * @return The module version.
+     */
     std::string getVersion() const override { return "2.0.0-beattracking"; }
 
+    /**
+     * @brief Initializes the module with specific configuration settings.
+     *
+     * @param config The configuration specific to this module (e.g., minBPM, maxBPM, engine type).
+     * @return true on successful initialization, false otherwise.
+     */
     bool initialize(const nlohmann::json& config) override {
         if (config.contains("minBPM")) m_cfg.minBPM = config["minBPM"].get<float>();
         if (config.contains("maxBPM")) m_cfg.maxBPM = config["maxBPM"].get<float>();
@@ -43,7 +71,7 @@ public:
                 m_fastAnalysisSec = 0.0;
             }
         }
-        // R4: Hybrid tempogram configuration
+        // Hybrid tempogram configuration
         if (config.contains("hybridTempogram")) m_hybridTempogram = config["hybridTempogram"].get<bool>();
         if (config.contains("combLambda")) {
             double lam = config["combLambda"].get<double>();
@@ -76,11 +104,21 @@ public:
         return true;
     }
 
+    /**
+     * @brief Resets the module's internal state (e.g., historical data).
+     */
     void reset() override { m_history.clear(); }
 
+    /**
+     * @brief Executes the BPM and beat tracking analysis.
+     *
+     * @param audio The input AudioBuffer to be analyzed.
+     * @param context The shared AnalysisContext (unused here, as BPM is usually a primary feature).
+     * @return A JSON object containing the primary BPM, confidence, and the beat grid.
+     */
     nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext&) override {
         const float sr = audio.getSampleRate();
-        m_octaveSwitchedLast = false; // reset health flag per track
+        m_octaveSwitchedLast = false; // Reset health flag per track
         if (audio.getFrameCount() == 0 || audio.getChannelCount() == 0) {
             return makeResultFallback(audio.getDuration());
         }
@@ -106,6 +144,7 @@ public:
 
         size_t N = m_cfg.frameSize;
         size_t H = m_cfg.hopSize;
+        // QM-like parameter initialization
         if (m_qmLike) {
             size_t hopQM = static_cast<size_t>(std::llround(sr * 0.01161));
             if (hopQM < 1) hopQM = 1;
@@ -118,7 +157,7 @@ public:
         }
         // Fast analysis: optionally limit analysis to the first m_fastAnalysisSec seconds
         if (m_fastAnalysisSec > 0.0) {
-            size_t maxSamples = static_cast<size_t>(std::llround(std::min<double>(mono.size(), m_fastAnalysisSec * sr)));
+            size_t maxSamples = static_cast<size_size_t>(std::llround(std::min<double>(mono.size(), m_fastAnalysisSec * sr)));
             if (maxSamples >= N) {
                 mono.resize(maxSamples);
             }
@@ -159,41 +198,49 @@ public:
         return bpmResult;
     }
 
+    /**
+     * @brief Validates the structure and content of the module's output.
+     *
+     * @param output The JSON object produced by the process method.
+     * @return true if the output is valid (contains bpm and beatGrid), false otherwise.
+     */
     bool validateOutput(const nlohmann::json& output) const override {
         return output.contains("bpm") && output.contains("beatGrid") &&
                output["bpm"].is_number() && output["bpm"] >= m_cfg.minBPM && output["bpm"] <= m_cfg.maxBPM;
     }
 
 private:
-    // Beat candidate structure for dynamic programming
+    /**
+     * @brief Structure representing a potential beat location detected from the ODF peaks.
+     */
     struct BeatCandidate {
-        double time;        // Time in seconds
-        double strength;    // ODF peak strength
-        size_t frameIndex;  // Frame index in ODF
+        double time;        ///< Time in seconds.
+        double strength;    ///< ODF peak strength.
+        size_t frameIndex;  ///< Frame index in ODF.
 
         BeatCandidate(double t, double s, size_t idx) : time(t), strength(s), frameIndex(idx) {}
     };
 
     BPMConfig m_cfg{};
-    double m_acfWindowSec = 8.0; // seconds (kept for compatibility)
-    size_t m_historySize = 10;
-    bool m_octaveCorrection = true;
-    bool m_qmLike = false;
-    bool m_fixedTempo = false;
+    double m_acfWindowSec = 8.0; ///< Window size in seconds for autocorrelation (deprecated, kept for config compatibility).
+    size_t m_historySize = 10;   ///< Size of history for smoothing (deprecated, kept for config compatibility).
+    bool m_octaveCorrection = true; ///< If true, post-process the result to select the optimal 0.5x, 1x, or 2x BPM.
+    bool m_qmLike = false;       ///< If true, use Mixxx-like window/hop parameters for native ODF extraction.
+    bool m_fixedTempo = false;   ///< If true, penalize large tempo changes in the DP step.
     // Exact Mixxx/QM-DSP engine toggle
-    bool m_useQMDSP = false;
-    double m_fastAnalysisSec = 0.0;
-    // R4: Hybrid tempogram (ACF + comb-like evidence)
-    bool m_hybridTempogram = false;
-    double m_combLambda = 0.3; // blend weight for COMB in [0,1]
-    int m_combHarmonics = 4;   // number of harmonics for comb evidence
-    // C2: Health flags support
-    bool m_octaveSwitchedLast = false; // set true if octave correction selected an alternate grid
-    std::vector<float> m_history;
+    bool m_useQMDSP = false;     ///< If true, use the dedicated QM-DSP path for Mixxx-identical results.
+    double m_fastAnalysisSec = 0.0; ///< If > 0.0, limit analysis to the first N seconds of audio.
+    // Hybrid tempogram (ACF + comb-like evidence)
+    bool m_hybridTempogram = false; ///< If true, blend autocorrelation with comb filter evidence in the tempogram.
+    double m_combLambda = 0.3;      ///< Blend weight for COMB in [0,1].
+    int m_combHarmonics = 4;        ///< Number of harmonics for comb evidence.
+    // Health flags support
+    bool m_octaveSwitchedLast = false; ///< Set true if octave correction selected an alternate grid (0.5x or 2x).
+    std::vector<float> m_history; ///< Previous BPM/interval history (deprecated/unused).
 
     // Exposed ODF for downstream modules (e.g., Onset)
     std::vector<double> m_lastODF;
-    double m_lastODFFrameRate = 0.0; // frames per second for m_lastODF
+    double m_lastODFFrameRate = 0.0; ///< Frames per second for m_lastODF.
 
     // New beat tracking methods
     std::vector<double> extractComplexSpectralDifferenceODF(const std::vector<float>& mono, size_t N, size_t H, float sr);
@@ -215,6 +262,15 @@ private:
                                                     double duration,
                                                     const std::vector<std::vector<double>>& tempogram);
 
+    /**
+     * @brief Helper to generate the standard result JSON structure.
+     * @param bpm The detected BPM value.
+     * @param conf The confidence score.
+     * @param interval The median beat interval in seconds.
+     * @param grid The beat grid JSON array.
+     * @param downbeats The downbeats JSON array.
+     * @return The structured JSON result.
+     */
     static nlohmann::json makeResult(double bpm, double conf, float interval,
                                      const nlohmann::json& grid, const nlohmann::json& downbeats) {
         return {
@@ -223,10 +279,17 @@ private:
             {"beatInterval", interval},
             {"beatGrid", grid},
             {"downbeats", downbeats},
-            {"method", "odf-acf-median"}
+            {"method", "odf-acf-median"} // Default native method tag
         };
     }
 
+    /**
+     * @brief Generates a fallback JSON result when beat tracking fails.
+     *
+     * It uses a default BPM (average of min/max config) and generates a synthetic grid.
+     * @param duration The duration of the audio.
+     * @return A fallback JSON result with 0.0 confidence.
+     */
     nlohmann::json makeResultFallback(double duration) const {
         double bpm = 0.5 * (m_cfg.minBPM + m_cfg.maxBPM);
         double interval = 60.0 / bpm;
@@ -240,7 +303,17 @@ private:
     }
 };
 
-// Implementation of complex spectral difference ODF (Davies & Plumbley approach)
+/**
+ * @brief Implements the Complex Spectral Difference Onset Detection Function (ODF).
+ *
+ * This ODF measures the increase in spectral magnitude and accounts for phase changes
+ * between consecutive frames, making it robust to noise and steady tones.
+ * @param mono The mono audio data.
+ * @param N The FFT window size.
+ * @param H The hop size.
+ * @param sr The sample rate.
+ * @return A vector of doubles representing the ODF over time.
+ */
 std::vector<double> RealBPMModule::extractComplexSpectralDifferenceODF(const std::vector<float>& mono, size_t N, size_t H, float sr) {
     const std::vector<float> winF = core::window::hann(N);
     std::vector<double> window(winF.begin(), winF.end());
@@ -248,7 +321,7 @@ std::vector<double> RealBPMModule::extractComplexSpectralDifferenceODF(const std
     const size_t numFrames = 1 + (mono.size() - N) / H;
     std::vector<double> odf; odf.reserve(numFrames);
 
-    // FFTW buffers - Fixed C-style cast to static_cast
+    // FFTW buffers
     double* in = static_cast<double*>(fftw_malloc(sizeof(double) * N));
     fftw_complex* out = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1)));
     fftw_plan plan = fftw_plan_dft_r2c_1d(static_cast<int>(N), in, out, FFTW_ESTIMATE);
@@ -275,7 +348,7 @@ std::vector<double> RealBPMModule::extractComplexSpectralDifferenceODF(const std
             // Complex spectral difference: magnitude of the difference
             double diffMag = std::abs(diff);
 
-            // Half-wave rectification: only positive changes contribute
+            // Half-wave rectification: only positive changes contribute (magnitude increase)
             if (std::abs(current) > std::abs(prevSpectrum[k])) {
                 complexDiff += diffMag;
             }
@@ -291,7 +364,7 @@ std::vector<double> RealBPMModule::extractComplexSpectralDifferenceODF(const std
     fftw_free(in);
     fftw_free(out);
 
-    // Apply smoothing to reduce noise
+    // Apply smoothing to reduce noise (3-point moving average)
     std::vector<double> smoothedODF = odf;
     for (size_t i = 1; i < smoothedODF.size() - 1; ++i) {
         smoothedODF[i] = 0.25 * odf[i-1] + 0.5 * odf[i] + 0.25 * odf[i+1];
@@ -300,14 +373,22 @@ std::vector<double> RealBPMModule::extractComplexSpectralDifferenceODF(const std
     return smoothedODF;
 }
 
-// Peak detection for beat candidates
+/**
+ * @brief Detects peaks in the ODF to identify potential beat candidates.
+ *
+ * Uses adaptive thresholding based on local statistics (mean + standard deviation)
+ * and non-maximum suppression to filter spurious peaks.
+ * @param odf The Onset Detection Function vector.
+ * @param frameRate The frame rate of the ODF (frames per second).
+ * @return A vector of BeatCandidate structures.
+ */
 std::vector<RealBPMModule::BeatCandidate> RealBPMModule::detectBeatCandidates(const std::vector<double>& odf, double frameRate) {
     std::vector<BeatCandidate> candidates;
 
     if (odf.size() < 5) return candidates;
 
     // Adaptive threshold based on local statistics
-    const size_t windowSize = static_cast<size_t>(frameRate * 0.5); // ~500ms window
+    const size_t windowSize = static_cast<size_t>(frameRate * 0.5); // ~500ms window for local statistics
     std::vector<double> localMean(odf.size());
     std::vector<double> localStd(odf.size());
 
@@ -333,9 +414,9 @@ std::vector<RealBPMModule::BeatCandidate> RealBPMModule::detectBeatCandidates(co
     for (size_t i = 2; i + 2 < odf.size(); ++i) {
         // Check for strict local maximum over a 5-sample neighborhood
         if (odf[i] > odf[i-1] && odf[i] > odf[i+1] && odf[i] > odf[i-2] && odf[i] > odf[i+2]) {
-            // Adaptive threshold: mean + 1.0 * std (more sensitive than previous 1.5)
+            // Adaptive threshold: mean + 1.0 * std
             double threshold = localMean[i] + 1.0 * localStd[i];
-            threshold = std::max(threshold, 0.01);
+            threshold = std::max(threshold, 0.01); // Minimum floor threshold
 
             if (odf[i] > threshold) {
                 bool suppressed = false;
@@ -362,7 +443,16 @@ std::vector<RealBPMModule::BeatCandidate> RealBPMModule::detectBeatCandidates(co
     return candidates;
 }
 
-// Compute tempogram - tempo salience over time
+/**
+ * @brief Computes the Tempogram, representing tempo salience over time.
+ *
+ * Uses a sliding window to calculate local autocorrelation (ACF) of the ODF,
+ * optionally blended with comb filter evidence. Harmonic ACF lags (0.5x and 2x)
+ * are included for robustness.
+ * @param odf The Onset Detection Function vector.
+ * @param frameRate The frame rate of the ODF.
+ * @return A 2D vector where rows are tempogram frames (time) and columns are tempo salience bins (BPM).
+ */
 std::vector<std::vector<double>> RealBPMModule::computeTempogram(const std::vector<double>& odf, double frameRate) {
     const double minBPM = static_cast<double>(m_cfg.minBPM);
     const double maxBPM = static_cast<double>(m_cfg.maxBPM);
@@ -439,7 +529,7 @@ std::vector<std::vector<double>> RealBPMModule::computeTempogram(const std::vect
                     }
                 }
 
-                // R4: Hybrid tempogram comb-like blending
+                // Hybrid tempogram comb-like blending
                 if (m_hybridTempogram) {
                     int Hcomb = std::max(2, m_combHarmonics);
                     double combSum = 0.0;
@@ -460,13 +550,14 @@ std::vector<std::vector<double>> RealBPMModule::computeTempogram(const std::vect
                     if (wsum > 0.0) {
                         double comb = combSum / wsum;
                         double lam = std::max(0.0, std::min(1.0, m_combLambda));
+                        // Blend (1-lambda) * ACF + lambda * Comb
                         tempoSalience[t] = (1.0 - lam) * tempoSalience[t] + lam * comb;
                     }
                 }
             }
         }
 
-        // Normalize and smooth the tempo salience
+        // Normalize and smooth the tempo salience (max normalization)
         double maxSalience = *std::max_element(tempoSalience.begin(), tempoSalience.end());
         if (maxSalience > 1e-10) {
             for (double& s : tempoSalience) {
@@ -480,7 +571,17 @@ std::vector<std::vector<double>> RealBPMModule::computeTempogram(const std::vect
     return tempogram;
 }
 
-// Dynamic Programming Beat Tracking (Viterbi-style algorithm)
+/**
+ * @brief Performs Dynamic Programming (Viterbi-style) to find the optimal beat sequence.
+ *
+ * It searches for the path through the beat candidates that maximizes a score function,
+ * where the score includes the ODF peak strength and a transition cost based on tempogram support.
+ * @param candidates The detected BeatCandidates.
+ * @param tempogram The pre-computed tempo salience map.
+ * @param frameRate The ODF frame rate.
+ * @param duration The audio duration in seconds.
+ * @return A vector of doubles representing the final beat times in seconds.
+ */
 std::vector<double> RealBPMModule::trackBeatsWithDynamicProgramming(
     const std::vector<BeatCandidate>& candidates,
     const std::vector<std::vector<double>>& tempogram,
@@ -520,7 +621,7 @@ std::vector<double> RealBPMModule::trackBeatsWithDynamicProgramming(
             // Compute transition cost
             double transitionCost = computeTransitionCost(prev, current, tempogram, frameRate);
 
-            // Compute new score
+            // Compute new score: Score[i] = Score[j] + Strength[i] + TransitionCost[j->i]
             double newScore = score[j] + current.strength + transitionCost;
 
             if (newScore > score[i]) {
@@ -530,7 +631,7 @@ std::vector<double> RealBPMModule::trackBeatsWithDynamicProgramming(
         }
     }
 
-    // Find the best ending point
+    // Find the best ending point (last 10 candidates)
     int bestEnd = -1;
     double bestScore = -1e9;
     for (size_t i = N - std::min<size_t>(N, 10); i < N; ++i) {
@@ -566,14 +667,24 @@ std::vector<double> RealBPMModule::trackBeatsWithDynamicProgramming(
     return beatTimes;
 }
 
-// Helper method to compute transition cost between two beat candidates
+/**
+ * @brief Helper method to compute transition cost between two beat candidates.
+ *
+ * The transition cost rewards intervals that match local tempogram salience,
+ * have harmonic relationships with the local dominant tempo, and are in common BPM ranges.
+ * It penalizes large tempo changes if fixedTempo is enabled.
+ * @param prev The predecessor beat candidate.
+ * @param current The current beat candidate.
+ * @param tempogram The tempo salience map.
+ * @param frameRate The ODF frame rate.
+ * @return The calculated transition cost.
+ */
 double RealBPMModule::computeTransitionCost(const BeatCandidate& prev, const BeatCandidate& current,
                                           const std::vector<std::vector<double>>& tempogram, double frameRate) {
     double interval = current.time - prev.time;
     if (interval <= 0.0) return -1e9;
     double impliedBPM = 60.0 / interval;
 
-    // Base cost: prefer intervals that match tempogram
     double tempogramSupport = 0.0;
     double harmonicBonus = 0.0;
     double tempoChangePenalty = 0.0;
@@ -613,11 +724,11 @@ double RealBPMModule::computeTransitionCost(const BeatCandidate& prev, const Bea
             double tolStrong = 0.08;  // ~8% tolerance
             double tolWeak = 0.06;
             auto near = [](double x, double t, double tol){ return std::abs(x - t) < tol; };
-            if (near(ratio, 1.0, tolStrong)) {
+            if (near(ratio, 1.0, tolStrong)) { // Exact match
                 harmonicBonus += 0.25;
-            } else if (near(ratio, 2.0, tolStrong) || near(ratio, 0.5, tolStrong)) {
+            } else if (near(ratio, 2.0, tolStrong) || near(ratio, 0.5, tolStrong)) { // Octave
                 harmonicBonus += 0.15;
-            } else if (near(ratio, 1.5, tolWeak) || near(ratio, 2.0/3.0, tolWeak)) {
+            } else if (near(ratio, 1.5, tolWeak) || near(ratio, 2.0/3.0, tolWeak)) { // Triplets / Duplets
                 harmonicBonus += 0.10;
             }
 
@@ -629,28 +740,32 @@ double RealBPMModule::computeTransitionCost(const BeatCandidate& prev, const Bea
                     tempoChangePenalty = 0.15;
                 }
             } else {
-                if (ratio < 0.67 || ratio > 1.5) {
+                if (ratio < 0.67 || ratio > 1.5) { // Highly unstable/changing
                     tempoChangePenalty = 0.20;
-                } else if (ratio < 0.8 || ratio > 1.25) {
+                } else if (ratio < 0.8 || ratio > 1.25) { // Moderate change
                     tempoChangePenalty = 0.10;
                 }
             }
         }
     }
 
-    // Musical preference: favor common BPM ranges (reduced to avoid bias)
+    // Musical preference: favor common BPM ranges
     double musicalBonus = 0.0;
     if (impliedBPM >= 100.0 && impliedBPM <= 140.0) {
-        musicalBonus = 0.30;  // Reduced bias vs previous 0.5
+        musicalBonus = 0.30;
     } else if (impliedBPM >= 80.0 && impliedBPM <= 180.0) {
-        musicalBonus = 0.15;  // Reduced bias vs previous 0.2
+        musicalBonus = 0.15;
     }
 
     // Combined transition cost (higher is better)
     return tempogramSupport + harmonicBonus + musicalBonus - tempoChangePenalty;
 }
 
-// Helper method to fill missing beats using interpolation
+/**
+ * @brief Fills in missing beats (intro/outro) by extrapolating using the median beat interval.
+ * @param beatTimes The currently detected beat times.
+ * @param duration The audio duration.
+ */
 void RealBPMModule::fillMissingBeats(std::vector<double>& beatTimes, double duration) {
     if (beatTimes.size() < 2) return;
 
@@ -690,7 +805,16 @@ void RealBPMModule::fillMissingBeats(std::vector<double>& beatTimes, double dura
     beatTimes = allBeats;
 }
 
-// Post-processing: Octave correction (0.5x/1x/2x)
+/**
+ * @brief Post-processing step to correct for octave errors (0.5x or 2x BPM).
+ *
+ * Compares the detected 1x grid against grids at 0.5x and 2x BPM using a scoring
+ * based on tempogram evidence, coverage match to the original peaks, and global stability.
+ * @param beatTimes The beat times calculated by DP (1x).
+ * @param duration The audio duration.
+ * @param tempogram The tempo salience map.
+ * @return The final beat grid (could be 0.5x, 1x, or 2x).
+ */
 std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector<double>& beatTimes,
                                                               double duration,
                                                               const std::vector<std::vector<double>>& tempogram) {
@@ -712,6 +836,7 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
 
     auto clamp01 = [](double x){ return std::max(0.0, std::min(1.0, x)); };
 
+    // Function to generate a full grid based on a BPM, anchored to the first DP beat
     auto makeGrid = [&](double bpm){
         double interval = 60.0 / bpm;
         // Anchor grid to first detected beat
@@ -723,6 +848,7 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
         return grid;
     };
 
+    // Function to calculate average tempogram evidence for a given BPM
     auto tempogramEvidence = [&](double bpm){
         if (tempogram.empty()) return 0.0;
         const double minBPM = static_cast<double>(m_cfg.minBPM);
@@ -736,15 +862,16 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
         int bin = std::max(0, std::min(tempoBins - 1, static_cast<int>(binFloat)));
         double sum = 0.0;
         for (const auto& row : tempogram) sum += row[bin];
-        // Fix: Removed check tempogram.size() > 0 (always true here)
         return sum / static_cast<double>(tempogram.size());
     };
 
+    // Function to calculate how well a hypothetical grid aligns with the original detected beats
     auto coverageMatch = [&](const std::vector<double>& grid){
         if (grid.empty()) return 0.0;
         double interval = (grid.size() >= 2) ? (grid[1] - grid[0]) : medianInterval;
-        double tol = 0.1 * interval;
-        // fraction of detected beats close to grid
+        double tol = 0.1 * interval; // 10% tolerance
+
+        // Match 1: fraction of detected beats close to grid
         size_t i = 0, j = 0; size_t closeDet = 0;
         while (i < beatTimes.size() && j < grid.size()) {
             double diff = beatTimes[i] - grid[j];
@@ -752,7 +879,8 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
             else if (diff > 0) { ++j; } else { ++i; }
         }
         double fracDet = static_cast<double>(closeDet) / static_cast<double>(beatTimes.size());
-        // fraction of grid beats close to detected beats
+
+        // Match 2: fraction of grid beats close to detected beats
         i = 0; j = 0; size_t closeGrid = 0;
         while (i < beatTimes.size() && j < grid.size()) {
             double diff = grid[j] - beatTimes[i];
@@ -760,7 +888,8 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
             else if (diff > 0) { ++i; } else { ++j; }
         }
         double fracGrid = static_cast<double>(closeGrid) / static_cast<double>(grid.size());
-        // Use conservative matching: take the minimum, not the average
+
+        // Use conservative matching: take the minimum
         return std::min(fracDet, fracGrid);
     };
 
@@ -778,7 +907,7 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
         Cand c; c.bpm = b; c.grid = makeGrid(b);
         c.ev = tempogramEvidence(b);
         c.cov = coverageMatch(c.grid);
-        const double alpha = 0.55, beta = 0.35, gamma = 0.10; // emphasize tempogram and coverage
+        const double alpha = 0.55, beta = 0.35, gamma = 0.10; // Emphasize tempogram (alpha) and coverage (beta)
         c.score = alpha * c.ev + beta * c.cov + gamma * stabilityFixed;
         cands.push_back(std::move(c));
     }
@@ -792,8 +921,9 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
 
     // Require strong improvement and better or comparable coverage to switch octave
     double relGain = (cands[bestIdx].score - cands[idx1x].score) / std::max(1e-6, cands[idx1x].score);
-    bool coverageGuard = (cands[idx1x].cov >= 0.85) && (cands[bestIdx].cov < cands[idx1x].cov + 0.05);
-    bool switchOctave = (bestIdx != idx1x && relGain > 0.15 && !coverageGuard);
+    // Coverage guard: if 1x already has high coverage, don't switch unless the new one is almost as good
+    bool coverageGuard = (cands[idx1x].cov >= 0.85) && (cands[bestIdx].cov < cands[idx1x].cov - 0.05); // Penalize large drop in coverage
+    bool switchOctave = (bestIdx != idx1x && relGain > 0.15 && !coverageGuard); // Need > 15% relative score gain
     m_octaveSwitchedLast = switchOctave;
     if (switchOctave) {
         return cands[bestIdx].grid; // adopt corrected octave grid
@@ -801,7 +931,15 @@ std::vector<double> RealBPMModule::postProcessOctaveCorrection(const std::vector
     return beatTimes; // keep original
 }
 
-// Generate final beat tracking result in expected JSON format
+/**
+ * @brief Generates the final beat tracking result in the expected JSON format.
+ *
+ * Calculates the final BPM (using circular alignment refinement), confidence score (based on stability and coverage),
+ * and creates the beat grid and downbeats arrays.
+ * @param beatTimes The final vector of beat times.
+ * @param duration The audio duration.
+ * @return The final JSON result including BPM, confidence, grid, and health metrics.
+ */
 nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<double>& beatTimes, double duration) {
     if (beatTimes.size() < 2) {
         return makeResultFallback(duration);
@@ -838,7 +976,7 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
                 }
                 double denom = (K * sumKK - sumK * sumK);
                 if (std::abs(denom) > 1e-12) {
-                    double slope = (K * sumKT - sumK * sumT) / denom; // seconds per beat index
+                    double slope = (K * sumKT - sumK * sumT) / denom; // seconds per beat index (the period)
                     if (slope > 1e-6 && std::isfinite(slope)) {
                         periodLS = slope;
                     }
@@ -846,12 +984,12 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
             }
         }
     }
-    // Refine global period by maximizing circular alignment around LS estimate
+    // Refine global period by maximizing circular alignment (phase coherence) around LS estimate
     double periodRef = periodLS;
     if (periodLS > 0.0 && beatTimes.size() >= 8) {
         const double PI = 3.14159265358979323846;
-        const double maxRel = 0.01; // ±1%
-        const int steps = 81;       // ~0.025% per step
+        const double maxRel = 0.01; // ±1% search range
+        const int steps = 81;       // Search steps
         double bestR = -1.0;
         double bestP = periodLS;
         for (int s = 0; s < steps; ++s) {
@@ -865,7 +1003,7 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
                 sx += std::cos(ang);
                 sy += std::sin(ang);
             }
-            double R = std::sqrt(sx*sx + sy*sy) / static_cast<double>(beatTimes.size());
+            double R = std::sqrt(sx*sx + sy*sy) / static_cast<double>(beatTimes.size()); // Mean resultant length (confidence measure)
             if (R > bestR) { bestR = R; bestP = P; }
         }
         if (bestR > 0.0) {
@@ -874,7 +1012,9 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     }
     double bpm = 60.0 / periodRef;
 
-    // Global interval consistency (kept as principal factor)
+    // --- Confidence Score Calculation ---
+
+    // 1. Global interval consistency: how close all intervals are to the median
     double mean = 0.0;
     for (double v : intervals) mean += v;
     mean /= static_cast<double>(intervals.size());
@@ -882,14 +1022,14 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     for (double v : intervals) { double d = v - mean; var += d * d; }
     var /= static_cast<double>(intervals.size());
     const double intervalStdDev = std::sqrt(var);
-    const double globalConsistency = std::max(0.0, std::min(1.0, 1.0 - (intervalStdDev / medianInterval) * 2.0));
+    const double globalConsistency = std::max(0.0, std::min(1.0, 1.0 - (intervalStdDev / medianInterval) * 2.0)); // Penalize deviation
 
-    // Coverage: how many beats we have vs. how many expected
+    // 2. Coverage: fraction of expected beats vs detected beats
     const double expectedBeats = std::max(1.0, duration / periodRef);
     const double rawCoverage = static_cast<double>(beatTimes.size()) / expectedBeats;
     const double coverageScore = std::max(0.0, std::min(1.0, rawCoverage));
 
-    // Local stability: sliding 4-second window std-dev of local intervals (lower is better)
+    // 3. Local stability: std-dev of local intervals over sliding window (lower is better)
     const double windowSec = 4.0;
     std::vector<double> localStdNorms;
     size_t startIdx = 0;
@@ -921,7 +1061,7 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     }
     const double localStabilityScore = std::max(0.0, std::min(1.0, 1.0 - localInstability));
 
-    // Composite confidence: weights w1=0.6 (global), w3=0.2 (coverage), w4=0.2 (local stability)
+    // Composite confidence: weighted average
     const double w1 = 0.6, w3 = 0.2, w4 = 0.2;
     double confidence = w1 * globalConsistency + w3 * coverageScore + w4 * localStabilityScore;
     confidence = std::max(0.0, std::min(1.0, confidence));
@@ -962,13 +1102,13 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
             {"method", method},
             {"engine", engine}};
 
-    // C2: Health metrics and flags
+    // --- Health metrics and flags ---
     // Fraction of intervals near octave-related durations (0.5x or 2x of median)
     size_t altCount = 0;
     for (double v : intervals) {
         double rHalf = std::abs(v - 0.5 * medianInterval) / std::max(1e-9, 0.5 * medianInterval);
         double rDouble = std::abs(v - 2.0 * medianInterval) / std::max(1e-9, 2.0 * medianInterval);
-        if (std::min(rHalf, rDouble) < 0.08) {
+        if (std::min(rHalf, rDouble) < 0.08) { // within 8% of a harmonic relationship
             ++altCount;
         }
     }
@@ -998,11 +1138,25 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
     return j;
 }
 
+/**
+ * @brief Factory function to create an instance of RealBPMModule.
+ * @return A unique pointer to the newly created IAnalysisModule.
+ */
 std::unique_ptr<core::IAnalysisModule> createRealBPMModule() { return std::make_unique<RealBPMModule>(); }
 
 } // namespace ave::modules
 
 // QM-DSP direct engine processing using DetectionFunction + TempoTrackV2
+/**
+ * @brief Processes the audio using the Queen Mary DSP (QM-DSP) library for beat tracking.
+ *
+ * This path is intended to replicate the beat tracking results of software like Mixxx.
+ * It uses the Complex Spectral Difference (CSD) Detection Function and TempoTrackV2.
+ * @param mono The mono audio data.
+ * @param sr The sample rate.
+ * @param duration The audio duration.
+ * @return A vector of doubles representing the beat times found by the QM-DSP engine.
+ */
 std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vector<float>& mono, float sr, double duration) {
     // Reset last ODF state
     m_lastODF.clear();
