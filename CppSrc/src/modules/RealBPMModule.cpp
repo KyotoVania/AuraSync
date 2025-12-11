@@ -972,7 +972,6 @@ nlohmann::json RealBPMModule::generateBeatTrackingResult(const std::vector<doubl
             ++altCount;
         }
     }
-    // Fix: removed check intervals.empty() which is always false here
     const double altHarmonicFraction = static_cast<double>(altCount) / intervals.size();
 
     const bool tempoDriftSuspected = (localInstability > 0.18) || (globalConsistency < 0.65);

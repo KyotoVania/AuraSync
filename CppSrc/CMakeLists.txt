@@ -23,7 +23,7 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFTW3 REQUIRED fftw3)
     include_directories(${FFTW3_INCLUDE_DIRS})
-    link_directories(${FFTW3_LIBRARY_DIRS}) # FIX: Added for Mac/Linux linking
+    link_directories(${FFTW3_LIBRARY_DIRS})
     set(FFTW_LIBRARIES ${FFTW3_LIBRARIES})
 endif()
 

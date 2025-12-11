@@ -47,10 +47,6 @@ jobs:
           --suppress=functionConst \
           -I include src/
 
-  # -----------------------------------------------------------
-  # JOB DOCS : Tourne en parallèle des tests (needs quality)
-  # Utilise MkDocs + Material Theme (Alternative moderne à Doxygen)
-  # -----------------------------------------------------------
   docs:
     name: Build Documentation
     needs: quality
@@ -68,21 +64,28 @@ jobs:
         run: |
           pip install mkdocs-material
 
-      - name: Create default config if missing
-        # Crée une config minimale si tu n'as pas encore de mkdocs.yml
+      - name: Setup Docs Structure
         run: |
+          # 1. On force la création du dossier docs (s'il existe déjà, -p ne fait rien)
+          mkdir -p docs
+          
+          # 2. Si index.md n'existe pas, on le crée à partir du README ou d'un texte par défaut
+          if [ ! -f docs/index.md ]; then
+            echo "index.md missing, creating from README..."
+            if [ -f README.md ]; then
+              cp README.md docs/index.md
+            else
+              echo "# AuraSync Documentation" > docs/index.md
+            fi
+          fi
+          
+          # 3. Si mkdocs.yml n'existe pas, on le crée
           if [ ! -f mkdocs.yml ]; then
             echo "Creating temporary mkdocs.yml..."
             echo "site_name: AuraSync Documentation" > mkdocs.yml
             echo "theme:" >> mkdocs.yml
             echo "  name: material" >> mkdocs.yml
-            echo "nav:" >> mkdocs.yml
-            echo "  - Home: index.md" >> mkdocs.yml
-            # On s'assure qu'il y a un index.md, sinon on copie le README
-            if [ ! -f docs/index.md ]; then
-              mkdir -p docs
-              if [ -f README.md ]; then cp README.md docs/index.md; else echo "# Documentation" > docs/index.md; fi
-            fi
+            # Pas besoin de définir 'nav' strictement, mkdocs le devine si le dossier docs existe
           fi
 
       - name: Build Site
