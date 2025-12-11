@@ -2,7 +2,8 @@ name: Docker Build & Push
 
 on:
   workflow_run:
-    workflows: ["C++ Audio Analyzer CI/CD"]
+    workflows:
+      - 'Cpp_CI'      # <--- Doit correspondre EXACTEMENT au name du cpp_ci.yml
     types:
       - completed
 
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   build-and-push:
+    # On vérifie que le workflow C++ a réussi avant de lancer Docker
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
@@ -41,7 +43,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          # CORRECTION: Le contexte est juste le dossier CppSrc
           context: CppSrc
           file: CppSrc/Dockerfile
           push: true

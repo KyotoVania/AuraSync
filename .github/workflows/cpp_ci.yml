@@ -1,5 +1,4 @@
-name: C++ Audio Analyzer CI/CD
-
+name: Cpp_CI
 on:
   push:
     branches: [ "main", "master" ]
