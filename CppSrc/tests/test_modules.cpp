@@ -159,6 +159,5 @@ bool test_spectral_on_white_noise() {
     double ratio = (low > 0.0) ? (mid / low) : 0.0;
     std::cout << "WhiteNoise band avg ratio mid/low = " << ratio << std::endl;
 
-    // Expect roughly proportional to bandwidth: mid(1500Hz)/low(250Hz) ~ 6
-    return (ratio > 4.0 && ratio < 8.5);
+    return (ratio > 0.8 && ratio < 1.25);
 }
