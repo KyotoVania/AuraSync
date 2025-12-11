@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <cstring> // Added for std::memcpy
 
 namespace ave::pipeline {
 
@@ -95,9 +96,11 @@ core::AudioBuffer AudioLoader::loadWav(const std::string& path) {
     auto decodeFloat32 = [&](void) {
         for (size_t i = 0; i < frames; ++i) {
             for (size_t ch = 0; ch < numChannels; ++ch) {
+                // Fix for Cppcheck invalidPointerCast: read bytes then memcpy
+                char bytes[4];
+                f.read(bytes, 4);
                 float s;
-                // cppcheck-suppress invalidPointerCast
-                f.read(reinterpret_cast<char*>(&s), 4);
+                std::memcpy(&s, bytes, 4);
                 buffer.getChannel(ch)[i] = s;
             }
         }
