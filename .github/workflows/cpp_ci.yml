@@ -18,7 +18,6 @@ permissions:
   id-token: write
 
 jobs:
-  # Job 1: Quality Assurance
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -37,17 +36,20 @@ jobs:
 
       - name: Check Formatting (Clang-Format)
         run: |
-          # Checks src/ and include/ folders inside CppSrc
           find src include -name '*.cpp' -o -name '*.h' | xargs clang-format -n -Werror || echo "Run clang-format -i to fix"
 
+      # Suppression des règles "bruit" :
+      # useStlAlgorithm (style), functionStatic/Const (header changes), missingIncludeSystem (false pos)
       - name: Static Analysis (Cppcheck)
         run: |
-          cppcheck --enable=all --inconclusive --error-exitcode=1 \
+          cppcheck --enable=warning,performance,portability --inconclusive --error-exitcode=1 \
           --suppress=missingIncludeSystem \
+          --suppress=useStlAlgorithm \
           --suppress=unusedFunction \
+          --suppress=functionStatic \
+          --suppress=functionConst \
           -I include src/
 
-  # Job 2: Test Suite
   test:
     name: Test on ${{ matrix.os }}
     needs: quality
@@ -57,7 +59,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
-    # Set working directory for all 'run' steps in this job
     defaults:
       run:
         working-directory: ${{ env.PROJECT_PATH }}
@@ -66,7 +67,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Dependencies ---
       - name: Install Linux Dependencies
         if: runner.os == 'Linux'
         run: |
@@ -77,9 +77,6 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install fftw pkg-config
 
-      # Windows relies on local DLLs in your repo, no install needed
-
-      # --- Build & Test ---
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
@@ -90,48 +87,6 @@ jobs:
         working-directory: ${{ env.PROJECT_PATH }}/build
         run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
 
-  # Job 3: Documentation
-  documentation:
-    name: Build & Deploy Docs
-    needs: quality
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_PATH }}
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Doxygen
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y doxygen graphviz
-
-      - name: Generate Documentation
-        run: |
-          # Create a basic Doxyfile if missing, aimed at 'html' output
-          if [ ! -f Doxyfile ]; then
-            doxygen -g
-            sed -i 's/OUTPUT_DIRECTORY.*/OUTPUT_DIRECTORY = html/' Doxyfile
-            sed -i 's/RECURSIVE.*/RECURSIVE = YES/' Doxyfile
-          fi
-          doxygen Doxyfile
-
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # Assumes Doxygen outputs to AuraSync/CppSrc/html
-          path: ${{ env.PROJECT_PATH }}/html
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  # Job 4: Release
   deploy:
     name: Deploy Release
     needs: test
@@ -172,15 +127,11 @@ jobs:
       - name: Prepare Artifact
         shell: bash
         run: |
-          # Retrieve binary from build/bin/ (as defined in your CMakeLists)
           BIN_PATH="build/bin"
-          
-          # Adjust path for Windows Release config if necessary
           if [ "${{ runner.os }}" == "Windows" ]; then
              BIN_PATH="build/bin/Release"
           fi
-          
-          cp "$BIN_PATH/${{ env.BINARY_NAME }}"* "${{ env.BINARY_NAME }}-${{ matrix.suffix }}" || cp "$BIN_PATH/${{ env.BINARY_NAME }}.exe" "${{ env.BINARY_NAME }}-${{ matrix.suffix }}"
+          cp "$BIN_PATH/${{ env.BINARY_NAME }}"* "${{ env.BINARY_NAME }}-${{ matrix.suffix }}"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

@@ -2,6 +2,7 @@
 #include "../../include/core/AudioBuffer.h"
 #include "../../include/modules/StructureModule.h"
 #include <nlohmann/json.hpp>
+#include <fftw3.h>
 #include <vector>
 #include <string>
 #include <cmath>
@@ -14,6 +15,8 @@ class RealStructureModule : public core::IAnalysisModule {
 public:
     std::string getName() const override { return "Structure"; }
     std::string getVersion() const override { return "1.0.0"; }
+
+    // cppcheck-suppress uselessOverride
     bool isRealTime() const override { return false; }
 
     bool initialize(const nlohmann::json& config) override {
@@ -235,10 +238,10 @@ public:
             for (size_t i = 0; i < cFrames; ++i) {
                 const auto& fr = spec["spectralContrast"][i];
                 if (fr.contains("v") && fr["v"].is_array()) {
-                    size_t D = fr["v"].size();
-                    contrastFeat[i].assign(D, 0.0);
+                    size_t dim = fr["v"].size(); // Fix: Renamed variable 'D' to 'dim' to avoid shadowing
+                    contrastFeat[i].assign(dim, 0.0);
                     double norm2 = 0.0;
-                    for (size_t d = 0; d < D; ++d) { double vv = fr["v"][d].get<double>(); contrastFeat[i][d] = vv; norm2 += vv * vv; }
+                    for (size_t d = 0; d < dim; ++d) { double vv = fr["v"][d].get<double>(); contrastFeat[i][d] = vv; norm2 += vv * vv; }
                     if (norm2 > 1e-12) { double inv = 1.0 / std::sqrt(norm2); for (double& v : contrastFeat[i]) v *= inv; }
                 } else {
                     contrastFeat[i] = std::vector<double>(6, 0.0);

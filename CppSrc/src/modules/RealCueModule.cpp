@@ -172,15 +172,12 @@ private:
         auto segments = (*structureResult)["segments"];
         nlohmann::json enrichedSegments = nlohmann::json::array();
         
-        // Default band centers (Hz) to approximate spectral centroid
-        const double fLow = 125.0, fMid = 1250.0, fHigh = 8000.0;
-        
         // Key clarity from tonality (track-level confidence) if available
         double keyClarityTrack = 0.0;
         if (tonalityResult && tonalityResult->contains("confidence")) {
             keyClarityTrack = (*tonalityResult)["confidence"].get<double>();
         }
-        
+
         // Track duration from last segment end, if available
         double trackDuration = 0.0;
         if (segments.is_array() && !segments.empty()) {
@@ -188,15 +185,15 @@ private:
             if (lastSeg.contains("end")) trackDuration = lastSeg["end"].get<double>();
         }
         if (trackDuration <= 0.0) trackDuration = 1.0; // avoid division by zero
-        
+
         for (const auto& segment : segments) {
             double start = segment["start"].get<double>();
             double end = segment["end"].get<double>();
             double duration = std::max(0.0, end - start);
-            
+
             // Calculate onset density
             double onsetDensity = calculateOnsetDensity(onsetResult, start, end);
-            
+
             // Calculate spectral energy (band averages)
             auto energies = calculateSpectralEnergies(spectralResult, start, end);
 
@@ -304,7 +301,7 @@ private:
                     }
                 }
             }
-            
+
             // Rhythm variance from inter-onset intervals within segment (coefficient of variation)
             double rhythmVar = 0.0;
             if (onsetResult && onsetResult->contains("onsets")) {
@@ -327,11 +324,11 @@ private:
                     rhythmVar = 0.0; // treat sparse as stable
                 }
             }
-            
+
             // Relative position of segment in track [0..1]
             double mid = 0.5 * (start + end);
             double relativePosition = std::clamp(trackDuration > 0.0 ? (mid / trackDuration) : 0.0, 0.0, 1.0);
-            
+
             // Create enriched segment with features
             SegmentFeatures fts;
             fts.duration = duration;
@@ -347,7 +344,7 @@ private:
             fts.timbralStability = timbralVar; // temporary store raw variance; normalized later
             fts.rhythmStability = rhythmVar;   // temporary store raw coefficient; normalized later
             fts.relativePosition = relativePosition;
-            
+
             nlohmann::json enriched = segment;
             enriched["duration"] = fts.duration;
             enriched["onsetDensity"] = fts.onsetDensity;
@@ -368,13 +365,13 @@ private:
             enriched["timbralVar"] = timbralVar;
             enriched["rhythmVar"] = rhythmVar;
             enriched["relativePosition"] = relativePosition;
-            
+
             enrichedSegments.push_back(enriched);
         }
-        
+
         return enrichedSegments;
     }
-    
+
     /**
      * Task 3: Apply semantic labeling heuristics
      */
@@ -495,12 +492,13 @@ private:
             auto nOnset = rOnset.norm(cur.onsetDensity);
             auto nCent = rCentroid.norm(cur.spectralCentroidMean);
             auto neighborContrast = [&](const SegmentFeatures* other){
-                if (!other) return 0.0; 
+                if (!other) return 0.0;
                 double d = 0.0; int c = 0;
                 d += std::abs(nOverall - rOverall.norm(other->overallEnergy)); ++c;
                 d += std::abs(nOnset - rOnset.norm(other->onsetDensity)); ++c;
                 d += std::abs(nCent - rCentroid.norm(other->spectralCentroidMean)); ++c;
-                return (c>0) ? (d/static_cast<double>(c)) : 0.0;
+                // Safe division (c is guaranteed 3)
+                return d / static_cast<double>(c);
             };
             double contrast = 0.5*neighborContrast(prev) + 0.5*neighborContrast(next);
             double timbreChange = 1.0 - cur.timbralStability;
@@ -547,13 +545,15 @@ private:
         }
 
         // Relational clustering: group similar 'chorus' segments and add numbering suffix
-        std::vector<size_t> chorusIdx;
-        for (size_t i = 0; i < labeledSegments.size(); ++i) if (labeledSegments[i].value("label", std::string()) == "chorus") chorusIdx.push_back(i);
-        if (!chorusIdx.empty()) {
-            // Simple chronological numbering for now; could refine with clustering
-            int count = 1;
-            for (size_t id : chorusIdx) {
-                labeledSegments[id]["label"] = std::string("chorus_") + std::to_string(count++);
+        {
+            std::vector<size_t> chorusIdxRefined;
+            for (size_t i = 0; i < labeledSegments.size(); ++i) if (labeledSegments[i].value("label", std::string()) == "chorus") chorusIdxRefined.push_back(i);
+            if (!chorusIdxRefined.empty()) {
+                // Simple chronological numbering for now; could refine with clustering
+                int count = 1;
+                for (size_t id : chorusIdxRefined) {
+                    labeledSegments[id]["label"] = std::string("chorus_") + std::to_string(count++);
+                }
             }
         }
 
@@ -645,9 +645,9 @@ private:
             }
             // Re-number chorus segments chronologically after consensus to keep suffixes tidy
             {
-                std::vector<size_t> chorusIdx;
-                for (size_t i = 0; i < labeledSegments.size(); ++i) if (baseFunctional(labeledSegments[i].value("label", std::string())) == "chorus") chorusIdx.push_back(i);
-                int num = 1; for (size_t id : chorusIdx) labeledSegments[id]["label"] = std::string("chorus_") + std::to_string(num++);
+                std::vector<size_t> chorusIdxRefined;
+                for (size_t i = 0; i < labeledSegments.size(); ++i) if (baseFunctional(labeledSegments[i].value("label", std::string())) == "chorus") chorusIdxRefined.push_back(i);
+                int num = 1; for (size_t id : chorusIdxRefined) labeledSegments[id]["label"] = std::string("chorus_") + std::to_string(num++);
             }
         }
 

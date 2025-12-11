@@ -61,7 +61,7 @@ public:
                     energy[f] = e;
                 }
                 // Half-wave rectified energy difference as ODF
-                std::vector<double> odfVals; odfVals.resize(energy.size(), 0.0);
+                std::vector<double> odfVals(energy.size(), 0.0);
                 for (size_t t = 1; t < energy.size(); ++t) {
                     double d = energy[t] - energy[t - 1];
                     if (d > 0.0) odfVals[t] = d; else odfVals[t] = 0.0;
@@ -171,14 +171,6 @@ private:
     int m_peakMeanWindow = 8;      // W in frames
     double m_peakThreshold = 0.05; // delta
     bool m_debug = false;
-
-    static nlohmann::json makeEmptyResult() {
-        return nlohmann::json{
-            {"onsets", nlohmann::json::array()},
-            {"count", 0},
-            {"sensitivity", 1.0}
-        };
-    }
 };
 
 std::unique_ptr<core::IAnalysisModule> createRealOnsetModule() {

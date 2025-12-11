@@ -80,9 +80,9 @@ public:
         const size_t numFrames = (mono.size() + H - 1) / H; // process until start < mono.size()
 
         // FFTW setup (plan once, execute per frame)
-        double* in = (double*)fftw_malloc(sizeof(double) * N);
+        double* in = static_cast<double*>(fftw_malloc(sizeof(double) * N));
         if (!in) return makeEmptyResult(sampleRate, N, H);
-        fftw_complex* out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1));
+        fftw_complex* out = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1)));
         if (!out) {
             fftw_free(in);
             return makeEmptyResult(sampleRate, N, H);

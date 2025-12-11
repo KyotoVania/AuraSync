@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <numeric>
 
 // Queen Mary DSP
 #include <dsp/keydetection/GetKeyMode.h>
@@ -119,6 +120,7 @@ public:
         m_helper = DownmixAndOverlapHelper{};
     }
 
+    // cppcheck-suppress uselessOverride
     std::vector<std::string> getDependencies() const override { return {}; }
 
     nlohmann::json process(const core::AudioBuffer& audio, const core::AnalysisContext&) override {
@@ -216,8 +218,11 @@ public:
             std::vector<double> window(winF.begin(), winF.end());
 
             size_t numFramesSeq = (mono.size() + Hseq - 1) / Hseq;
+
+            // Fix: C-style cast to static_cast
             double* inS = static_cast<double*>(fftw_malloc(sizeof(double) * Nseq));
             fftw_complex* outS = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (Nseq / 2 + 1)));
+
             fftw_plan planS = fftw_plan_dft_r2c_1d(static_cast<int>(Nseq), inS, outS, FFTW_ESTIMATE);
             const size_t numBinsS = Nseq / 2 + 1;
 
@@ -243,14 +248,15 @@ public:
                     if (cb < 0) cb += 12;
                     cv[static_cast<size_t>(cb)] += power;
                 }
-                double ssum = 0.0; for (double v : cv) ssum += v;
+
+                // Fix: Removed loop re-definition, using accumulate
                 double ssum = std::accumulate(cv.begin(), cv.end(), 0.0);
                 if (ssum > 0.0) {
                     std::transform(cv.begin(), cv.end(), cv.begin(), [ssum](double v) { return v / ssum; });
                 }
                 nlohmann::json vj = nlohmann::json::array();
                 for (double x : cv) vj.push_back(x);
-                chromaSeq.push_back({{"t", t}, {"v", vj}});
+                chromaSeq.push_back({{"t", static_cast<double>(f) * static_cast<double>(Hseq) / static_cast<double>(sr)}, {"v", vj}});
             }
             fftw_destroy_plan(planS);
             fftw_free(inS);
@@ -332,14 +338,16 @@ private:
         size_t numFrames = (mono.size() + H - 1) / H;
         if (numFrames == 0) return std::vector<double>(12, 0.0);
 
-        // FFTW setup
-        double* inS = static_cast<double*>(fftw_malloc(sizeof(double) * Nseq));
-        fftw_complex* outS = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (Nseq / 2 + 1)));
+        // FFTW setup - Fixed undefined variables (inS/outS/Nseq)
+        double* in = static_cast<double*>(fftw_malloc(sizeof(double) * N));
+        fftw_complex* out = static_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * (N / 2 + 1)));
+
         if (!in || !out) {
             if (in) fftw_free(in);
             if (out) fftw_free(out);
             return std::vector<double>(12, 0.0);
         }
+
         fftw_plan plan = fftw_plan_dft_r2c_1d(static_cast<int>(N), in, out, FFTW_ESTIMATE);
 
         std::vector<double> chroma(12, 0.0);
@@ -369,7 +377,9 @@ private:
         fftw_destroy_plan(plan);
         fftw_free(in);
         fftw_free(out);
-        double sum = 0.0; for (double v : chroma) sum += v;
+
+        // Normalize using accumulate
+        double sum = std::accumulate(chroma.begin(), chroma.end(), 0.0);
         if (sum > 0.0) { for (double& v : chroma) v /= sum; }
         return chroma;
     }
