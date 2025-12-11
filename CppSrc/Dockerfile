@@ -4,10 +4,11 @@ FROM ubuntu:22.04
 # Éviter les questions interactives lors de l'installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 2. Installer les dépendances (CMake, Compilateur, FFTW)
+# 2. Installer les dépendances (CMake, Compilateur, FFTW, ET GIT !)
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
+    git \
     libfftw3-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,5 +24,4 @@ RUN mkdir build && cd build && \
     make
 
 # 6. Commande par défaut (lancer l'analyseur ou les tests)
-# Remplace "ave_tests" par le nom de ton exécutable principal si nécessaire
 CMD ["./build/ave_tests"]

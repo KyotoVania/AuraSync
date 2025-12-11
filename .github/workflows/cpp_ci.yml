@@ -13,8 +13,8 @@ env:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
+  pages: write      # Nécessaire pour déployer la doc
+  id-token: write   # Nécessaire pour GitHub Pages
 
 jobs:
   quality:
@@ -37,8 +37,6 @@ jobs:
         run: |
           find src include -name '*.cpp' -o -name '*.h' | xargs clang-format -n -Werror || echo "Run clang-format -i to fix"
 
-      # Suppression des règles "bruit" :
-      # useStlAlgorithm (style), functionStatic/Const (header changes), missingIncludeSystem (false pos)
       - name: Static Analysis (Cppcheck)
         run: |
           cppcheck --enable=warning,performance,portability --inconclusive --error-exitcode=1 \
@@ -49,6 +47,69 @@ jobs:
           --suppress=functionConst \
           -I include src/
 
+  # -----------------------------------------------------------
+  # JOB DOCS : Tourne en parallèle des tests (needs quality)
+  # Utilise MkDocs + Material Theme (Alternative moderne à Doxygen)
+  # -----------------------------------------------------------
+  docs:
+    name: Build Documentation
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install MkDocs & Material
+        run: |
+          pip install mkdocs-material
+
+      - name: Create default config if missing
+        # Crée une config minimale si tu n'as pas encore de mkdocs.yml
+        run: |
+          if [ ! -f mkdocs.yml ]; then
+            echo "Creating temporary mkdocs.yml..."
+            echo "site_name: AuraSync Documentation" > mkdocs.yml
+            echo "theme:" >> mkdocs.yml
+            echo "  name: material" >> mkdocs.yml
+            echo "nav:" >> mkdocs.yml
+            echo "  - Home: index.md" >> mkdocs.yml
+            # On s'assure qu'il y a un index.md, sinon on copie le README
+            if [ ! -f docs/index.md ]; then
+              mkdir -p docs
+              if [ -f README.md ]; then cp README.md docs/index.md; else echo "# Documentation" > docs/index.md; fi
+            fi
+          fi
+
+      - name: Build Site
+        run: mkdocs build
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'site'
+
+  # Déploiement de la doc uniquement sur main/master
+  deploy-docs:
+    name: Deploy Docs to Pages
+    needs: docs
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # -----------------------------------------------------------
+  # JOB TESTS (Inchangé)
+  # -----------------------------------------------------------
   test:
     name: Test on ${{ matrix.os }}
     needs: quality
