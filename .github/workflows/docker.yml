@@ -2,7 +2,7 @@ name: Docker Build & Push
 
 on:
   workflow_run:
-    workflows: ["Hybrid Rust/C++ CI/CD"] # Must match the new CI name
+    workflows: ["C++ Audio Analyzer CI/CD"]
     types:
       - completed
 
@@ -14,6 +14,7 @@ jobs:
   build-and-push:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,7 +41,10 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          # Sets the build context to the C++ source folder
+          context: AuraSync/CppSrc
+          # Assumes the Dockerfile is located inside AuraSync/CppSrc
+          file: AuraSync/CppSrc/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
