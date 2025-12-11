@@ -1,27 +1,29 @@
-# 1. Image de base (Ubuntu avec les outils de compilation)
+# 1. Image de base
 FROM ubuntu:22.04
 
-# Éviter les questions interactives lors de l'installation
+# Éviter les questions interactives
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 2. Installer les dépendances (CMake, Compilateur, FFTW, ET GIT !)
+# 2. Installer les dépendances :
+# Ajout de 'pkg-config' nécessaire pour que CMake trouve les libs
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     git \
+    pkg-config \
     libfftw3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Définir le dossier de travail dans le conteneur
+# 3. Dossier de travail
 WORKDIR /app
 
-# 4. Copier tout le contenu du dossier CppSrc dans le conteneur
+# 4. Copie des sources
 COPY . .
 
-# 5. Créer le dossier build, compiler le projet
+# 5. Build
 RUN mkdir build && cd build && \
     cmake .. && \
     make
 
-# 6. Commande par défaut (lancer l'analyseur ou les tests)
+# 6. Commande par défaut
 CMD ["./build/ave_tests"]
