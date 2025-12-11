@@ -10,7 +10,7 @@ on:
 env:
   BUILD_TYPE: Release
   BINARY_NAME: ave_analysis
-  PROJECT_PATH: AuraSync/CppSrc
+  PROJECT_PATH: CppSrc
 
 permissions:
   contents: write
