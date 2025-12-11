@@ -43,8 +43,6 @@ Thumbs.db
 *.tmp
 *.bak
 
-# Ignore by default all hidden files/folders
-.*
 
 # Don't ignore source, configs, docs
 !guide.md
