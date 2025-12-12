@@ -60,9 +60,15 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install MkDocs & Material
+      - name: Install Doxygen
         run: |
-          pip install mkdocs-material
+          sudo apt-get update
+          sudo apt-get install -y doxygen
+
+      - name: Install MkDocs & MkDoxy
+        run: |
+          # mkdoxy s'occupe de l'extraction des docstrings C++ en Markdown
+          pip install mkdocs-material mkdoxy
 
       - name: Setup Docs Structure
         run: |

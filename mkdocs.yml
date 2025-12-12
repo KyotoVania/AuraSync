@@ -1,6 +1,9 @@
-site_name: AuraSync Doc
+site_name: AuraSync Documentation
 theme:
   name: material
-nav:
-  - Home: index.md
-  - API: api.md
+plugins:
+  - search
+  - mkdoxy:
+      AuraSync:
+        src-dirs: CppSrc
+        full-doc: True
