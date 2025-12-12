@@ -16,14 +16,23 @@
 
 // Forward declarations for module factories
 namespace ave::modules {
-    std::unique_ptr<ave::core::IAnalysisModule> createFakeOnsetModule();
-    std::unique_ptr<ave::core::IAnalysisModule> createFakeStructureModule();
-    std::unique_ptr<ave::core::IAnalysisModule> createFakeTonalityModule();
-    std::unique_ptr<ave::core::IAnalysisModule> createFakeSpectralModule();
+    // Note: Renamed 'Fake' to 'Real' based on context in main()
+    std::unique_ptr<ave::core::IAnalysisModule> createRealBPMModule();
+    std::unique_ptr<ave::core::IAnalysisModule> createRealOnsetModule();
+    std::unique_ptr<ave::core::IAnalysisModule> createRealStructureModule();
+    std::unique_ptr<ave::core::IAnalysisModule> createRealTonalityModule();
+    std::unique_ptr<ave::core::IAnalysisModule> createRealSpectralModule();
     std::unique_ptr<ave::core::IAnalysisModule> createRealCueModule();
 }
 
-// Real audio loader using WAV reader
+/**
+ * @brief Loads the audio file using the WAV reader or falls back to a silent buffer on failure.
+ *
+ * Checks for failure and creates a silent AudioBuffer whose properties (duration,
+ * channels, sample rate) can be configured via environment variables.
+ * @param path The file path to the audio file (expected WAV format).
+ * @return A core::AudioBuffer containing the audio data or silence fallback.
+ */
 ave::core::AudioBuffer loadAudioFile(const std::string& path) {
     try {
         return ave::pipeline::AudioLoader::loadWav(path);
@@ -47,6 +56,15 @@ ave::core::AudioBuffer loadAudioFile(const std::string& path) {
     }
 }
 
+/**
+ * @brief Main function for the Audio Visual Engine analysis executable.
+ *
+ * Handles argument parsing, audio loading, pipeline configuration via JSON,
+ * execution of modules, and saving the final structured JSON output.
+ * @param argc The number of command-line arguments.
+ * @param argv The command-line arguments.
+ * @return 0 on successful execution, non-zero on error.
+ */
 int main(int argc, char* argv[]) {
     std::cout << "=== Audio Visual Engine - Analysis Pipeline ===" << std::endl;
     std::cout << "Version: 1.0.0-prototype" << std::endl << std::endl;
@@ -70,7 +88,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\nCreating analysis pipeline..." << std::endl;
         auto pipeline = std::make_unique<ave::pipeline::AnalysisPipeline>();
 
-        // Register modules (use real BPM, others fake for now)
+        // Register all available analysis modules
         std::cout << "Registering modules..." << std::endl;
         pipeline->registerModule(ave::modules::createRealBPMModule());
         pipeline->registerModule(ave::modules::createRealOnsetModule());
@@ -78,7 +96,8 @@ int main(int argc, char* argv[]) {
         pipeline->registerModule(ave::modules::createRealTonalityModule());
         pipeline->registerModule(ave::modules::createRealSpectralModule());
         pipeline->registerModule(ave::modules::createRealCueModule());
-        std::cout << "Modules  registered." << std::endl;
+        std::cout << "Modules registered." << std::endl;
+
         // Load configuration file (JSON) strictly from provided path
         nlohmann::json cfg;
         {
@@ -110,7 +129,7 @@ int main(int argc, char* argv[]) {
                 if (enabled && m.contains("config")) {
                     pipeline->setModuleConfig(name, m["config"]);
                     std::cout << "[Config] Applied settings to '" << name << "'" << std::endl;
-                    // Extra visibility for Spectral extended mode
+                    // Extra visibility for Spectral extended mode parameters
                     if (name == "Spectral") {
                         bool ext = false;
                         int resHz = 0;
@@ -130,14 +149,15 @@ int main(int argc, char* argv[]) {
             std::cerr << "[Config] No 'modules' object found in configuration; using defaults for all modules." << std::endl;
         }
 
-        // Validate dependencies
+        // Validate dependencies (check for cycles)
         if (!pipeline->validateDependencies()) {
-            std::cerr << "Error: Circular dependencies detected!" << std::endl;
+            std::cerr << "Error: Circular dependencies detected! Check module configuration." << std::endl;
             return 1;
         }
 
         // Show execution order
         std::cout << "\nExecution order:" << std::endl;
+        // The execution order is a result of the topological sort based on dependencies.
         for (const auto& moduleName : pipeline->getExecutionOrder()) {
             std::cout << "  - " << moduleName << std::endl;
         }
@@ -145,7 +165,7 @@ int main(int argc, char* argv[]) {
         // 3. Run analysis
         std::cout << "\nRunning analysis..." << std::endl;
 
-        // Progress callback
+        // Progress callback definition
         auto progressCallback = [](const std::string& module, float progress) {
             std::cout << "  [" << module << "] "
                      << static_cast<int>(progress * 100) << "%" << std::endl;
@@ -153,24 +173,25 @@ int main(int argc, char* argv[]) {
 
         nlohmann::json analysisResult = pipeline->analyze(audioBuffer, progressCallback);
 
-        // 4. Add processing time
+        // 4. Add processing time to metadata
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             endTime - startTime).count();
         analysisResult["analysisMetadata"]["processingTime"] = duration / 1000.0;
 
-        // 5. Validate output
+        // 5. Validate output structure
         if (!ave::core::JsonContract::validate(analysisResult)) {
-            std::cerr << "Warning: Output validation failed!" << std::endl;
+            std::cerr << "Warning: Output validation failed! The result may not conform to the expected schema." << std::endl;
         }
 
-        // 6. Save to file
+        // 6. Save results to file
         std::cout << "\nSaving results to: " << outputFile << std::endl;
         std::ofstream outFile(outputFile);
+        // Dump JSON with indentation (2 spaces) for readability
         outFile << analysisResult.dump(2);
         outFile.close();
 
-        // 7. Print summary
+        // 7. Print summary of key results
         std::cout << "\n=== Analysis Complete ===" << std::endl;
         std::cout << "Processing time: " << duration / 1000.0 << " seconds" << std::endl;
 
@@ -185,6 +206,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (analysisResult.contains("structure")) {
+            // Use count() check for array size in JSON
             std::cout << "Structure segments: " << analysisResult["structure"].size() << std::endl;
         }
 
@@ -193,6 +215,7 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "\nOutput saved to: " << outputFile << std::endl;
+        // Calculate output file size in KB
         std::cout << "File size: " << analysisResult.dump().size() / 1024.0 << " KB" << std::endl;
 
     } catch (const std::exception& e) {
