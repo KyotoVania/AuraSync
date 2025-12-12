@@ -384,7 +384,7 @@ public:
                 a = std::max<int>(0, a);
                 b = std::max<int>(a, b);
                 double sum = 0.0; int cnt = 0;
-                for (int i = a; i <= b; ++i) { sum += noveltySm[static_cast<size_size_t>(i)]; ++cnt; }
+                for (int i = a; i <= b; ++i) { sum += noveltySm[static_cast<size_t>(i)]; ++cnt; }
                 double lmean = cnt ? (sum / cnt) : 0.0;
                 double threshLocal = lmean * (1.0 + m_peakThreshold);
                 double threshGlobal = gmean + m_peakThreshold * gstd;

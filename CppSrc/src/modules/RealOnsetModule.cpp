@@ -86,7 +86,7 @@ public:
             // Compatibility fallback: compute a simple energy-based ODF directly
             // using Onset module settings (time-domain, no FFT)
             const size_t N = m_fftSize;
-            const size_t H = m_hopSize == 0 ? std::max<size_size_t>(1, N / 4) : m_hopSize;
+            const size_t H = m_hopSize == 0 ? std::max<size_t>(1, N / 4) : m_hopSize;
             const double sr = context.sampleRate;
             std::vector<float> mono = audio.getMono();
             if (!mono.empty()) {

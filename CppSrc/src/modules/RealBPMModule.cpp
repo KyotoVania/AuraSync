@@ -157,7 +157,7 @@ public:
         }
         // Fast analysis: optionally limit analysis to the first m_fastAnalysisSec seconds
         if (m_fastAnalysisSec > 0.0) {
-            size_t maxSamples = static_cast<size_size_t>(std::llround(std::min<double>(mono.size(), m_fastAnalysisSec * sr)));
+            size_t maxSamples = static_cast<size_t>(std::llround(std::min<double>(mono.size(), m_fastAnalysisSec * sr)));
             if (maxSamples >= N) {
                 mono.resize(maxSamples);
             }

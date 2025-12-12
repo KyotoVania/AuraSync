@@ -62,7 +62,7 @@ public:
      */
     bool finalize() {
         // Pad with silence to flush last window
-        size_size_t framesToFillWindow = (m_windowSize > m_writePos) ? (m_windowSize - m_writePos) : 0;
+        size_t framesToFillWindow = (m_windowSize > m_writePos) ? (m_windowSize - m_writePos) : 0;
         size_t numInputFrames = std::max(framesToFillWindow, m_windowSize / 2 - 1);
         return processInner(nullptr, numInputFrames);
     }
