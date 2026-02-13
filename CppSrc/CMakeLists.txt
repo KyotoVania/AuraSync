@@ -29,7 +29,7 @@ FetchContent_MakeAvailable(qmdsp)
 if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
     message(STATUS "Using vcpkg toolchain, finding FFTW3 via find_package...")
     find_package(FFTW3 CONFIG REQUIRED)
-    set(FFTW3_INCLUDE_DIRS "")
+    # vcpkg targets handle include directories automatically
     set(FFTW3_LIBRARIES FFTW3::fftw3)
 else()
     # Try to find FFTW3 using pkg-config first (for systems with it installed)

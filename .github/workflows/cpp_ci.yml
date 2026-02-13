@@ -152,14 +152,14 @@ jobs:
           vcpkg install fftw3:x64-windows
         shell: pwsh
 
-      - name: Configure CMake
-        run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
-          else
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-          fi
-        shell: bash
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        shell: pwsh
+
+      - name: Configure CMake (Unix)
+        if: runner.os != 'Windows'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
@@ -206,15 +206,18 @@ jobs:
           vcpkg install fftw3:x64-windows
         shell: pwsh
 
-      - name: Build Release
+      - name: Build Release (Windows)
+        if: runner.os == 'Windows'
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
-          else
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
           cmake --build build --config Release
-        shell: bash
+        shell: pwsh
+
+      - name: Build Release (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
 
       - name: Prepare Artifact
         shell: bash
