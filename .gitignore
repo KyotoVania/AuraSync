@@ -8,6 +8,7 @@
 
 # Build artifacts & directories
 /build/
+/CppSrc/build/
 /CppSrc/bin/
 /CppSrc/Debug/
 /CppSrc/x64/
