@@ -1,59 +1,61 @@
-# C++ build artifacts
-CppSrc/build/
-CppSrc/bin/
-CppSrc/Debug/
-CppSrc/x64/
-CppSrc/CMakeFiles/
-CppSrc/CMakeCache.txt
-CppSrc/_deps/
-CppSrc/*.vcxproj
-CppSrc/*.vcxproj.filters
-CppSrc/*.sln
-CppSrc/*.pdb
-CppSrc/*.obj
-CppSrc/*.exp
-CppSrc/*.lib
-CppSrc/*.ipch
-CppSrc/*.aps
-CppSrc/*.ncb
-CppSrc/*.suo
-CppSrc/*.sdf
-CppSrc/*.opensdf
-CppSrc/*.VC.db
-CppSrc/*.VC.opendb
+# ==================================
+# General Ignores
+# ==================================
 
-# FFTW binaries
-CppSrc/fftw-3.3.5-dll64/*.dll
-CppSrc/fftw-3.3.5-dll64/*.exe
-CppSrc/fftw-3.3.5-dll64/*.lib
-CppSrc/fftw-3.3.5-dll64/*.exp
+# IDE specific files
+/.idea/
+.vscode/
 
-# Rust build artifacts
-RustSrc/target/
-RustSrc/*.rlib
-RustSrc/*.d
-RustSrc/*.exe
+# Build artifacts & directories
+/build/
+/CppSrc/bin/
+/CppSrc/Debug/
+/CppSrc/x64/
+/CppSrc/CMakeFiles/
+/CppSrc/_deps/
+/CppSrc/lib/
+-o
 
-# OS/IDE files
-*.DS_Store
+# Build artifact files
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.pdb
+*.obj
+*.exp
+*.lib
+*.ipch
+*.aps
+*.ncb
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+CMakeCache.txt
+
+# Analysis results & data
+*.json
+*.csv
+# Keep specific configuration files
+!/CppSrc/config.json
+!/CppSrc/config_extended.json
+
+# Documentation/Papers (if not part of the source)
+/CppSrc/ScientificPapers/
+
+# Generated images
+*.png
+
+# OS generated files
+.DS_Store
 Thumbs.db
 *.log
-
-# Misc
 *.tmp
 *.bak
 
-
-# Don't ignore source, configs, docs
+# ==================================
+# Keep specific files
+# ==================================
 !guide.md
 !README.md
-!CppSrc/include/
-!CppSrc/src/
-!CppSrc/tests/
-!RustSrc/src/
-!RustSrc/Cargo.toml
-!RustSrc/Cargo.lock
-!shared/
-
-
-.idea/

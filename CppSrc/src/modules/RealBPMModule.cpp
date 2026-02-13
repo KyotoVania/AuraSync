@@ -1216,7 +1216,11 @@ std::vector<double> ave::modules::RealBPMModule::processWithQMDSP(const std::vec
     m_lastODFFrameRate = (stepSize > 0) ? (static_cast<double>(sampleRate) / static_cast<double>(stepSize)) : 0.0;
 
     TempoTrackV2 tt(static_cast<float>(sampleRate), stepSize);
-    tt.calculateBeatPeriod(df, beatPeriod);
+
+    std::vector<double> tempi;
+    tempi.reserve(df.size());
+
+    tt.calculateBeatPeriod(df, beatPeriod, tempi);
 
     std::vector<double> beats;
     tt.calculateBeats(df, beatPeriod, beats);

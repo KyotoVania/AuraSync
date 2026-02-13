@@ -8,6 +8,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 include(FetchContent)
+
+# --- Dependency: nlohmann/json ---
 FetchContent_Declare(
         json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -15,18 +17,67 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# --- Dependency: qm-dsp ---
+FetchContent_Declare(
+        qmdsp
+        GIT_REPOSITORY https://github.com/c4dm/qm-dsp.git
+)
+FetchContent_MakeAvailable(qmdsp)
+
+# --- Dependency: FFTW ---
 if(WIN32)
-    set(FFTW3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/fftw-3.3.5-dll64)
-    include_directories(${FFTW3_DIR})
-    set(FFTW_LIBRARIES ${FFTW3_DIR}/libfftw3-3.lib)
+    # The vcpkg/Windows way - relies on the CMAKE_TOOLCHAIN_FILE to find the package
+    find_package(fftw3 CONFIG REQUIRED)
 else()
+    # The pkg-config way for Linux/macOS
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFTW3 REQUIRED fftw3)
-    include_directories(${FFTW3_INCLUDE_DIRS})
-    link_directories(${FFTW3_LIBRARY_DIRS})
-    set(FFTW_LIBRARIES ${FFTW3_LIBRARIES})
 endif()
 
+# Add the include and library paths found by either method to the global scope for all subsequent targets
+include_directories(${FFTW3_INCLUDE_DIRS})
+link_directories(${FFTW3_LIBRARY_DIRS})
+
+
+# --- Library: ave_qmdsp (built from fetched qm-dsp sources) ---
+add_library(ave_qmdsp STATIC
+        ${qmdsp_SOURCE_DIR}/dsp/onsets/DetectionFunction.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/phasevocoder/PhaseVocoder.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/tempotracking/TempoTrackV2.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/transforms/FFT.cpp
+        ${qmdsp_SOURCE_DIR}/ext/kissfft/kiss_fft.c
+        ${qmdsp_SOURCE_DIR}/ext/kissfft/tools/kiss_fftr.c
+        ${qmdsp_SOURCE_DIR}/maths/MathUtilities.cpp
+        ${qmdsp_SOURCE_DIR}/maths/Correlation.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/signalconditioning/DFProcess.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/signalconditioning/Filter.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/signalconditioning/FiltFilt.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/signalconditioning/Framer.cpp
+        ${qmdsp_SOURCE_DIR}/base/Pitch.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/chromagram/Chromagram.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/chromagram/ConstantQ.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/rateconversion/Decimator.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/rateconversion/DecimatorB.cpp
+        ${qmdsp_SOURCE_DIR}/dsp/keydetection/GetKeyMode.cpp
+)
+
+target_include_directories(ave_qmdsp PUBLIC
+        ${qmdsp_SOURCE_DIR}
+        ${qmdsp_SOURCE_DIR}/include
+        ${qmdsp_SOURCE_DIR}/ext/kissfft
+        ${qmdsp_SOURCE_DIR}/ext/kissfft/tools
+)
+
+if (MSVC)
+    target_compile_definitions(ave_qmdsp PRIVATE 
+        _CRT_SECURE_NO_WARNINGS
+        _USE_MATH_DEFINES
+    )
+endif()
+target_compile_definitions(ave_qmdsp PUBLIC KISS_FFT_USE_DOUBLE kiss_fft_scalar=double)
+
+
+# --- Library: ave_core ---
 add_library(ave_core STATIC
         src/core/AudioBuffer.cpp
         src/core/JsonContract.cpp
@@ -43,59 +94,23 @@ add_library(ave_core STATIC
 target_include_directories(ave_core
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
 )
-
-add_library(ave_qmdsp STATIC
-        lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
-        lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp
-        lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
-        lib/qm-dsp/dsp/transforms/FFT.cpp
-        lib/qm-dsp/ext/kissfft/kiss_fft.c
-        lib/qm-dsp/ext/kissfft/tools/kiss_fftr.c
-        lib/qm-dsp/maths/MathUtilities.cpp
-        lib/qm-dsp/maths/Correlation.cpp
-        lib/qm-dsp/dsp/signalconditioning/DFProcess.cpp
-        lib/qm-dsp/dsp/signalconditioning/Filter.cpp
-        lib/qm-dsp/dsp/signalconditioning/FiltFilt.cpp
-        lib/qm-dsp/dsp/signalconditioning/Framer.cpp
-        lib/qm-dsp/base/Pitch.cpp
-        lib/qm-dsp/dsp/chromagram/Chromagram.cpp
-        lib/qm-dsp/dsp/chromagram/ConstantQ.cpp
-        lib/qm-dsp/dsp/rateconversion/Decimator.cpp
-        lib/qm-dsp/dsp/rateconversion/DecimatorB.cpp
-        lib/qm-dsp/dsp/keydetection/GetKeyMode.cpp
-)
-
-target_include_directories(ave_qmdsp PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/qm-dsp/include
-)
-
-if (MSVC)
-    target_compile_definitions(ave_qmdsp PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
-target_compile_definitions(ave_qmdsp PUBLIC KISS_FFT_USE_DOUBLE kiss_fft_scalar=double)
 
 target_link_libraries(ave_core
         PUBLIC
         nlohmann_json::nlohmann_json
         ave_qmdsp
-        ${FFTW_LIBRARIES}
+        ${FFTW3_LIBRARIES}
 )
 
+
+# --- Main Executable ---
 add_executable(ave_analysis src/main.cpp)
 target_link_libraries(ave_analysis PRIVATE ave_core)
 
-if(WIN32)
-    add_custom_command(TARGET ave_analysis POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${FFTW3_DIR}/libfftw3-3.dll"
-            $<TARGET_FILE_DIR:ave_analysis>
-    )
-endif()
+# No longer need to copy DLL for fftw as vcpkg handles it
 
+# --- Tests ---
 option(BUILD_TESTS "Build tests" ON)
 
 if(BUILD_TESTS)
@@ -135,17 +150,10 @@ if(BUILD_TESTS)
         )
     endif()
 
-    if(WIN32)
-        add_custom_command(TARGET ave_tests POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${FFTW3_DIR}/libfftw3-3.dll"
-                $<TARGET_FILE_DIR:ave_tests>
-        )
-    endif()
-
     add_test(NAME ave_tests COMMAND ave_tests)
 endif()
 
+# --- Installation ---
 install(TARGETS ave_analysis ave_core
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib
