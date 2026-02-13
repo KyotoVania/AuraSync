@@ -146,8 +146,20 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install fftw pkg-config
 
+      - name: Install Windows Dependencies
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install fftw3:x64-windows
+        shell: pwsh
+
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          fi
+        shell: bash
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
@@ -188,10 +200,21 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install fftw pkg-config
 
+      - name: Install Windows Deps
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install fftw3:x64-windows
+        shell: pwsh
+
       - name: Build Release
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
           cmake --build build --config Release
+        shell: bash
 
       - name: Prepare Artifact
         shell: bash

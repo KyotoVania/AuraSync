@@ -25,36 +25,44 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(qmdsp)
 
 # --- Dependency: FFTW3 ---
-# Try to find FFTW3 using pkg-config first (for systems with it installed)
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(FFTW3 QUIET fftw3)
-endif()
-
-if(NOT FFTW3_FOUND)
-    # Fetch FFTW3 from source
-    message(STATUS "FFTW3 not found via pkg-config, fetching from source...")
-    
-    FetchContent_Declare(
-            fftw3
-            URL https://www.fftw.org/fftw-3.3.10.tar.gz
-            URL_HASH MD5=8ccbf6a5ea78a16dbc3e1306e234cc5c
-    )
-    
-    # Configure FFTW3 build options - use only double precision
-    set(ENABLE_FLOAT OFF CACHE BOOL "Build single precision library" FORCE)
-    set(ENABLE_LONG_DOUBLE OFF CACHE BOOL "Build long double precision library" FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL "Build FFTW tests" FORCE)
-    set(DISABLE_FORTRAN ON CACHE BOOL "Disable Fortran wrapper" FORCE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
-    
-    FetchContent_MakeAvailable(fftw3)
-    
-    # Set FFTW3 variables for consistency
-    set(FFTW3_INCLUDE_DIRS ${fftw3_SOURCE_DIR}/api)
-    set(FFTW3_LIBRARIES fftw3)
+# If using vcpkg toolchain, find FFTW3 via find_package
+if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
+    message(STATUS "Using vcpkg toolchain, finding FFTW3 via find_package...")
+    find_package(FFTW3 CONFIG REQUIRED)
+    set(FFTW3_INCLUDE_DIRS "")
+    set(FFTW3_LIBRARIES FFTW3::fftw3)
 else()
-    message(STATUS "Found FFTW3 via pkg-config")
+    # Try to find FFTW3 using pkg-config first (for systems with it installed)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(FFTW3 QUIET fftw3)
+    endif()
+
+    if(NOT FFTW3_FOUND)
+        # Fetch FFTW3 from source
+        message(STATUS "FFTW3 not found via pkg-config, fetching from source...")
+        
+        FetchContent_Declare(
+                fftw3
+                URL https://www.fftw.org/fftw-3.3.10.tar.gz
+                URL_HASH MD5=8ccbf6a5ea78a16dbc3e1306e234cc5c
+        )
+        
+        # Configure FFTW3 build options - use only double precision
+        set(ENABLE_FLOAT OFF CACHE BOOL "Build single precision library" FORCE)
+        set(ENABLE_LONG_DOUBLE OFF CACHE BOOL "Build long double precision library" FORCE)
+        set(BUILD_TESTS OFF CACHE BOOL "Build FFTW tests" FORCE)
+        set(DISABLE_FORTRAN ON CACHE BOOL "Disable Fortran wrapper" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+        
+        FetchContent_MakeAvailable(fftw3)
+        
+        # Set FFTW3 variables for consistency
+        set(FFTW3_INCLUDE_DIRS ${fftw3_SOURCE_DIR}/api)
+        set(FFTW3_LIBRARIES fftw3)
+    else()
+        message(STATUS "Found FFTW3 via pkg-config")
+    endif()
 endif()
 
 # --- Library: ave_qmdsp (built from fetched qm-dsp sources) ---
