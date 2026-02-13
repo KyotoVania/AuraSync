@@ -1,0 +1,8 @@
+{
+  "name": "audiovisualengineanalysis",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "fftw3",
+    "nlohmann-json"
+  ]
+}
