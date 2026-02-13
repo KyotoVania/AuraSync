@@ -137,6 +137,54 @@ Automatic documentation is generated on every push to the ``main`` branch. (http
 
 ---
 
+## Releases & Deployments
+
+### Creating a Release
+
+To trigger the **Deploy Release CI** workflow and create a new release with compiled binaries for all platforms (Linux, Windows, macOS), you need to create and push a Git tag with the format `v*` (e.g., `v1.0.0`, `v2.1.3`).
+
+**Quick steps:**
+
+1. **Ensure your code is ready:**
+   ```bash
+   # Make sure all changes are committed
+   git status
+   git add .
+   git commit -m "Prepare for release v1.0.0"
+   ```
+
+2. **Create a tag:**
+   ```bash
+   # Create an annotated tag (recommended)
+   git tag -a v1.0.0 -m "Release version 1.0.0"
+   
+   # Or create a lightweight tag
+   git tag v1.0.0
+   ```
+
+3. **Push the tag to GitHub:**
+   ```bash
+   # Push the specific tag
+   git push origin v1.0.0
+   
+   # Or push all tags at once
+   git push --tags
+   ```
+
+4. **Monitor the deployment:**
+   - Go to the [Actions tab](https://github.com/KyotoVania/AuraSync/actions) in the GitHub repository
+   - Watch the **Cpp_CI** workflow run
+   - The **Deploy Release** job will build binaries for all platforms and create a GitHub Release
+
+**Important notes:**
+- Tags must start with `v` to trigger the deployment (e.g., `v1.0.0`, `v2.3.1-beta`)
+- The CI will automatically build for Linux, Windows, and macOS
+- Release artifacts will be available in the [Releases](https://github.com/KyotoVania/AuraSync/releases) section
+
+For more detailed information about the release process, see [RELEASE.md](RELEASE.md).
+
+---
+
 ### Troubleshooting
 
 **CMake Error: `fftw3` not found**
