@@ -15,7 +15,7 @@ Quick Start
     • Example: ave_analysis tests\assets\SimonTheDivergentStar116BpmFm.wav analysis.json
 - Run tests:
   - <your-cmake-build-dir>\bin\ave_tests.exe
-
+ 
 Command‑line usage
 - ave_analysis <input.wav> [output.json]
   - input.wav: path to a mono/stereo PCM WAV file
