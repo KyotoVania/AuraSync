@@ -1,6 +1,7 @@
 {
   "name": "audiovisualengineanalysis",
   "version-string": "1.0.0",
+  "builtin-baseline": "2024.11.27",
   "dependencies": [
     "fftw3",
     "nlohmann-json"
