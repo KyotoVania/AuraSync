@@ -7,6 +7,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# --- Vcpkg setup ---
+# If CMAKE_TOOLCHAIN_FILE is not set, we are not using a foreign toolchain.
+# In this case, we will automatically set up vcpkg to handle our dependencies.
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    # Get vcpkg by using FetchContent
+    include(FetchContent)
+    FetchContent_Declare(
+            vcpkg
+            GIT_REPOSITORY https://github.com/microsoft/vcpkg.git
+    )
+    FetchContent_MakeAvailable(vcpkg)
+
+    # Set CMAKE_TOOLCHAIN_FILE to use the vcpkg toolchain.
+    # We set it in the CACHE so that this block is not executed on subsequent runs.
+    set(CMAKE_TOOLCHAIN_FILE "${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake"
+            CACHE STRING "Vcpkg toolchain file")
+endif()
+# --- End of Vcpkg setup ---
+
+
 include(FetchContent)
 
 # --- Dependency: nlohmann/json ---
@@ -25,19 +45,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(qmdsp)
 
 # --- Dependency: FFTW ---
-if(WIN32)
-    # The vcpkg/Windows way - relies on the CMAKE_TOOLCHAIN_FILE to find the package
-    find_package(fftw3 CONFIG REQUIRED)
-else()
-    # The pkg-config way for Linux/macOS
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(FFTW3 REQUIRED fftw3)
-endif()
-
-# Add the include and library paths found by either method to the global scope for all subsequent targets
-include_directories(${FFTW3_INCLUDE_DIRS})
-link_directories(${FFTW3_LIBRARY_DIRS})
-
+# With the vcpkg toolchain, we can just find the package.
+# The vcpkg.json file tells vcpkg to install fftw3.
+find_package(FFTW3 CONFIG REQUIRED)
 
 # --- Library: ave_qmdsp (built from fetched qm-dsp sources) ---
 add_library(ave_qmdsp STATIC
@@ -69,7 +79,7 @@ target_include_directories(ave_qmdsp PUBLIC
 )
 
 if (MSVC)
-    target_compile_definitions(ave_qmdsp PRIVATE 
+    target_compile_definitions(ave_qmdsp PRIVATE
         _CRT_SECURE_NO_WARNINGS
         _USE_MATH_DEFINES
     )
@@ -100,7 +110,7 @@ target_link_libraries(ave_core
         PUBLIC
         nlohmann_json::nlohmann_json
         ave_qmdsp
-        ${FFTW3_LIBRARIES}
+        FFTW3::fftw3
 )
 
 
