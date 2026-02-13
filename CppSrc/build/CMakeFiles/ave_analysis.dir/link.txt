@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/ave_analysis.dir/link.d CMakeFiles/ave_analysis.dir/src/main.cpp.o -o bin/ave_analysis  libave_core.a libave_qmdsp.a -lfftw3

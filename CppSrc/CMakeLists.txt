@@ -7,26 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# --- Vcpkg setup ---
-# If CMAKE_TOOLCHAIN_FILE is not set, we are not using a foreign toolchain.
-# In this case, we will automatically set up vcpkg to handle our dependencies.
-if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    # Get vcpkg by using FetchContent
-    include(FetchContent)
-    FetchContent_Declare(
-            vcpkg
-            GIT_REPOSITORY https://github.com/microsoft/vcpkg.git
-    )
-    FetchContent_MakeAvailable(vcpkg)
-
-    # Set CMAKE_TOOLCHAIN_FILE to use the vcpkg toolchain.
-    # We set it in the CACHE so that this block is not executed on subsequent runs.
-    set(CMAKE_TOOLCHAIN_FILE "${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake"
-            CACHE STRING "Vcpkg toolchain file")
-endif()
-# --- End of Vcpkg setup ---
-
-
 include(FetchContent)
 
 # --- Dependency: nlohmann/json ---
@@ -44,10 +24,38 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(qmdsp)
 
-# --- Dependency: FFTW ---
-# With the vcpkg toolchain, we can just find the package.
-# The vcpkg.json file tells vcpkg to install fftw3.
-find_package(FFTW3 CONFIG REQUIRED)
+# --- Dependency: FFTW3 ---
+# Try to find FFTW3 using pkg-config first (for systems with it installed)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(FFTW3 QUIET fftw3)
+endif()
+
+if(NOT FFTW3_FOUND)
+    # Fetch FFTW3 from source
+    message(STATUS "FFTW3 not found via pkg-config, fetching from source...")
+    
+    FetchContent_Declare(
+            fftw3
+            URL https://www.fftw.org/fftw-3.3.10.tar.gz
+            URL_HASH MD5=8ccbf6a5ea78a16dbc3e1306e234cc5c
+    )
+    
+    # Configure FFTW3 build options - use only double precision
+    set(ENABLE_FLOAT OFF CACHE BOOL "Build single precision library" FORCE)
+    set(ENABLE_LONG_DOUBLE OFF CACHE BOOL "Build long double precision library" FORCE)
+    set(BUILD_TESTS OFF CACHE BOOL "Build FFTW tests" FORCE)
+    set(DISABLE_FORTRAN ON CACHE BOOL "Disable Fortran wrapper" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+    
+    FetchContent_MakeAvailable(fftw3)
+    
+    # Set FFTW3 variables for consistency
+    set(FFTW3_INCLUDE_DIRS ${fftw3_SOURCE_DIR}/api)
+    set(FFTW3_LIBRARIES fftw3)
+else()
+    message(STATUS "Found FFTW3 via pkg-config")
+endif()
 
 # --- Library: ave_qmdsp (built from fetched qm-dsp sources) ---
 add_library(ave_qmdsp STATIC
@@ -104,21 +112,20 @@ add_library(ave_core STATIC
 target_include_directories(ave_core
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${FFTW3_INCLUDE_DIRS}
 )
 
 target_link_libraries(ave_core
         PUBLIC
         nlohmann_json::nlohmann_json
         ave_qmdsp
-        FFTW3::fftw3
+        ${FFTW3_LIBRARIES}
 )
 
 
 # --- Main Executable ---
 add_executable(ave_analysis src/main.cpp)
 target_link_libraries(ave_analysis PRIVATE ave_core)
-
-# No longer need to copy DLL for fftw as vcpkg handles it
 
 # --- Tests ---
 option(BUILD_TESTS "Build tests" ON)

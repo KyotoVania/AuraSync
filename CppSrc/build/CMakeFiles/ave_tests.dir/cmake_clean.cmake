@@ -1,0 +1,42 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/ave_tests.dir/link.d"
+  "CMakeFiles/ave_tests.dir/tests/test_cue_synthesis.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_cue_synthesis.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_json_contract.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_json_contract.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_main.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_main.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_modules.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_modules.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_accented.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_accented.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_click.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_click.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_click_var_bpm.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_click_var_bpm.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_noise_bursts.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_noise_bursts.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_ramp.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_ramp.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_silence.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_onset_silence.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_pipeline.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_pipeline.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_structure_blocks.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_structure_blocks.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_structure_constant.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_structure_constant.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_tonality_aminor.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_tonality_aminor.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_tonality_chroma.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_tonality_chroma.cpp.o.d"
+  "CMakeFiles/ave_tests.dir/tests/test_tonality_cmajor.cpp.o"
+  "CMakeFiles/ave_tests.dir/tests/test_tonality_cmajor.cpp.o.d"
+  "bin/ave_tests"
+  "bin/ave_tests.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/ave_tests.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()
